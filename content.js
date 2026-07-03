@@ -1,8 +1,10 @@
 (() => {
-  const VERSION = "0.3.6-syntax-hotfix";
+  const VERSION = "0.3.7-state-export";
+  const STATE_SCHEMA_VERSION = 1;
   const PANEL_ID = "catchat-rescuer-v030-panel";
   const LEGACY_PANEL_ID = "catchat-rescuer-panel";
   const GLOBAL_KEY = "__catChatRescuer_v030_loaded";
+  // Keep the v0.3.6 DB name for backward-compatible local cache loading.
   const DB_NAME = "CatChatRescuerDB_v0_3_6_syntax_hotfix";
   const STORE = "conversations";
 
@@ -35,7 +37,7 @@
     autoScrolling: false,
     speedMode: "normal",
     exportOrder: "oldestFirst",
-    status: "v0.3.6：语法修复版。",
+    status: "v0.3.7：已支持 State 与日期元数据。",
     captureStartedAtMs: null,
     totalElapsedMs: 0,
     timerRunning: false,
@@ -538,6 +540,82 @@
     return (s || "").replace(/\r\n/g, "\n");
   }
 
+  function yamlString(s) {
+    return JSON.stringify(String(s ?? ""));
+  }
+
+  function isoDate(iso) {
+    return String(iso || new Date().toISOString()).slice(0, 10);
+  }
+
+  function isoForFilename(iso) {
+    return String(iso || new Date().toISOString()).replace(/[:.]/g, "-");
+  }
+
+  function baseExportName(exportedAt) {
+    return `catchat-${isoDate(exportedAt)}-v037-${state.id}-${isoForFilename(exportedAt)}`;
+  }
+
+  function normalizeForAnchor(text) {
+    return safeText(text).replace(/\s+/g, " ");
+  }
+
+  function previewText(text, max = 120) {
+    const normalized = normalizeForAnchor(text);
+    if (normalized.length <= max) return normalized;
+    return `${normalized.slice(0, max - 1)}…`;
+  }
+
+  function messageAnchor(message, ordinal) {
+    const normalized = normalizeForAnchor(message.text || "");
+    return {
+      ordinal,
+      role: message.role || "unknown",
+      id: message.id || null,
+      normalized_hash: hashText(`${message.role || "unknown"}\n${normalized}`),
+      preview: previewText(message.text || ""),
+      text_length: normalized.length,
+      has_assets: false,
+      captured_at: message.capturedAt || null
+    };
+  }
+
+  function buildRescueState(messages, exportedAt, outputFiles = {}) {
+    const anchorWindowSize = Math.min(10, messages.length);
+    const start = Math.max(0, messages.length - anchorWindowSize);
+    const tailAnchors = messages.slice(start).map((message, i) => messageAnchor(message, start + i + 1));
+    const last = messages.length > 0 ? messageAnchor(messages[messages.length - 1], messages.length) : null;
+    return {
+      schema_version: STATE_SCHEMA_VERSION,
+      exporter_version: VERSION,
+      conversation_id: state.id,
+      source_url: state.url,
+      title: state.title,
+      created_at: exportedAt,
+      last_exported_at: exportedAt,
+      timezone: "UTC",
+      message_count: messages.length,
+      raw_captured_count: state.map.size,
+      export_order: state.exportOrder,
+      export_order_label: exportOrderLabel(),
+      total_elapsed: fmtDuration(totalElapsedMs()),
+      speed: speedConfig().label,
+      tail_anchor_window_size: anchorWindowSize,
+      tail_anchors: tailAnchors,
+      last_message: last,
+      message_timestamps_available: false,
+      message_capture_timestamps_available: true,
+      output_files: outputFiles,
+      notes: "Message-level original timestamps are not available from the current DOM capture. captured_at is plugin capture time, not the original ChatGPT message time."
+    };
+  }
+
+  function downloadRescueState(messages, exportedAt, baseName, outputFiles = {}) {
+    const rescueState = buildRescueState(messages, exportedAt, outputFiles);
+    download(`${baseName}.rescue-state.json`, JSON.stringify(rescueState, null, 2), "application/json;charset=utf-8");
+    return rescueState;
+  }
+
   function download(filename, content, type) {
     const blob = new Blob([content], { type });
     const a = document.createElement("a");
@@ -551,10 +629,17 @@
 
   async function exportJSON() {
     await grabVisible("export");
-    const messages = orderedMessages().map((m, i) => ({ index: i + 1, ...m }));
+    const exportedAt = new Date().toISOString();
+    const baseName = baseExportName(exportedAt);
+    const rawMessages = orderedMessages();
+    const messages = rawMessages.map((m, i) => ({ index: i + 1, ...m }));
+    const jsonFilename = `${baseName}.json`;
+    const stateFilename = `${baseName}.rescue-state.json`;
     const data = {
       exporterVersion: VERSION,
-      exportedAt: new Date().toISOString(),
+      exportedAt,
+      date: isoDate(exportedAt),
+      timezone: "UTC",
       conversationId: state.id,
       title: state.title,
       url: state.url,
@@ -567,31 +652,78 @@
       speedMode: state.speedMode,
       speedLabel: speedConfig().label,
       timerMode: "new auto-scroll run resets total timer; stop/natural end pauses timer",
+      messageTimestampsAvailable: false,
+      messageCaptureTimestampsAvailable: true,
+      rescueStateFile: stateFilename,
       messages
     };
-    download(`catchat-v030-${state.id}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`, JSON.stringify(data, null, 2), "application/json;charset=utf-8");
+    download(jsonFilename, JSON.stringify(data, null, 2), "application/json;charset=utf-8");
+    downloadRescueState(rawMessages, exportedAt, baseName, { json: jsonFilename, rescue_state: stateFilename });
+    state.status = `已导出 JSON + State｜${messages.length} 条`;
+    updatePanel(true);
   }
 
   async function exportMarkdown() {
     await grabVisible("export");
+    const exportedAt = new Date().toISOString();
+    const baseName = baseExportName(exportedAt);
     const messages = orderedMessages();
-    let md = `# ${escapeMd(state.title)}\n\n`;
+    const mdFilename = `${baseName}.md`;
+    const stateFilename = `${baseName}.rescue-state.json`;
+    let md = "---\n";
+    md += `title: ${yamlString(state.title)}\n`;
+    md += `date: ${yamlString(isoDate(exportedAt))}\n`;
+    md += `timezone: ${yamlString("UTC")}\n`;
+    md += `exported_at: ${yamlString(exportedAt)}\n`;
+    md += `conversation_id: ${yamlString(state.id)}\n`;
+    md += `url: ${yamlString(state.url)}\n`;
+    md += `message_count: ${messages.length}\n`;
+    md += `raw_captured_count: ${state.map.size}\n`;
+    md += `export_order: ${yamlString(exportOrderLabel())}\n`;
+    md += `total_elapsed: ${yamlString(fmtDuration(totalElapsedMs()))}\n`;
+    md += `speed: ${yamlString(speedConfig().label)}\n`;
+    md += `exporter_version: ${yamlString(VERSION)}\n`;
+    md += "message_timestamps_available: false\n";
+    md += "message_capture_timestamps_available: true\n";
+    md += `rescue_state_file: ${yamlString(stateFilename)}\n`;
+    md += "---\n\n";
+    md += `# ${escapeMd(state.title)}\n\n`;
     md += `- exporter_version: ${VERSION}\n`;
+    md += `- date: ${isoDate(exportedAt)}\n`;
+    md += `- timezone: UTC\n`;
     md += `- conversation_id: \`${state.id}\`\n`;
-    md += `- exported_at: ${new Date().toISOString()}\n`;
+    md += `- exported_at: ${exportedAt}\n`;
     md += `- url: ${state.url}\n`;
     md += `- message_count: ${messages.length}\n`;
     md += `- raw_captured_count: ${state.map.size}\n`;
     md += `- export_order: ${exportOrderLabel()}\n`;
     md += `- total_elapsed: ${fmtDuration(totalElapsedMs())}\n`;
     md += `- speed: ${speedConfig().label}\n`;
-    md += `- timer_mode: new auto-scroll run resets total timer; stop/natural end pauses timer\n\n`;
+    md += `- timer_mode: new auto-scroll run resets total timer; stop/natural end pauses timer\n`;
+    md += `- message_timestamps_available: false\n`;
+    md += `- message_capture_timestamps_available: true\n`;
+    md += `- rescue_state_file: \`${stateFilename}\`\n\n`;
+    md += `> Note: message block headers use sequence numbers only. Original ChatGPT message timestamps are not available from the current DOM capture; capturedAt remains available in JSON and rescue-state anchors.\n\n`;
     for (let i = 0; i < messages.length; i++) {
       const m = messages[i];
       const who = m.role === "user" ? "主人" : (m.role === "assistant" ? "猫猫" : m.role);
-      md += `## ${who}｜${i + 1}\n\n${escapeMd(m.text)}\n\n`;
+      const index = String(i + 1).padStart(4, "0");
+      md += `## ${who}｜${index}\n\n${escapeMd(m.text)}\n\n`;
     }
-    download(`catchat-v030-${state.id}-${new Date().toISOString().replace(/[:.]/g, "-")}.md`, md, "text/markdown;charset=utf-8");
+    download(mdFilename, md, "text/markdown;charset=utf-8");
+    downloadRescueState(messages, exportedAt, baseName, { markdown: mdFilename, rescue_state: stateFilename });
+    state.status = `已导出 MD + State｜${messages.length} 条`;
+    updatePanel(true);
+  }
+
+  async function exportStateOnly() {
+    await grabVisible("export");
+    const exportedAt = new Date().toISOString();
+    const baseName = baseExportName(exportedAt);
+    const messages = orderedMessages();
+    downloadRescueState(messages, exportedAt, baseName, { rescue_state: `${baseName}.rescue-state.json` });
+    state.status = `已导出 State｜${messages.length} 条｜锚点 ${Math.min(10, messages.length)} 条`;
+    updatePanel(true);
   }
 
   function makePanel() {
@@ -602,7 +734,7 @@
     panel.id = PANEL_ID;
     panel.innerHTML = `
       <div class="ccr-title">
-        <span>猫茶抢救器 v0.3.6</span>
+        <span>猫茶抢救器 v0.3.7</span>
         <button id="ccr-hide" title="Hide">×</button>
       </div>
       <div class="ccr-count">已捕获：<span id="ccr-count">0</span></div>
@@ -620,10 +752,11 @@
         <button id="ccr-order">顺序：时间正序</button>
         <button id="ccr-json">导出 JSON</button>
         <button id="ccr-md">导出 MD</button>
+        <button id="ccr-state">导出 State</button>
         <button id="ccr-reset">重置计时</button>
         <button id="ccr-clear">清空插件缓存</button>
       </div>
-      <div class="ccr-status" id="ccr-status">v0.3.6：语法修复版。</div>
+      <div class="ccr-status" id="ccr-status">v0.3.7：已支持 State 与日期元数据。</div>
     `;
     document.body.appendChild(panel);
 
@@ -637,6 +770,7 @@
     panel.querySelector("#ccr-order").onclick = () => toggleExportOrder();
     panel.querySelector("#ccr-json").onclick = () => exportJSON();
     panel.querySelector("#ccr-md").onclick = () => exportMarkdown();
+    panel.querySelector("#ccr-state").onclick = () => exportStateOnly();
     panel.querySelector("#ccr-reset").onclick = () => resetTimer();
     panel.querySelector("#ccr-clear").onclick = () => clearCurrent();
   }
@@ -676,7 +810,7 @@
     installListeners();
 
     const old = await loadRecord().catch(() => null);
-    if (old?.messages?.length && old.exporterVersion === VERSION) {
+    if (old?.messages?.length) {
       for (const m of old.messages) state.map.set(m.id, m);
       state.order = Array.isArray(old.order) ? old.order : [...state.map.keys()];
       state.captureSeq = old.captureSeq || state.map.size || 0;
@@ -692,7 +826,7 @@
 
     startPanelTimer();
     updatePanel(true);
-    console.log("[CatChat Rescuer v0.3.6] syntax hotfix loaded.");
+    console.log("[CatChat Rescuer v0.3.7] state export loaded.");
   }
 
   init();
