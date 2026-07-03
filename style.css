@@ -1,0 +1,63 @@
+#catchat-rescuer-v030-panel {
+  position: fixed !important;
+  right: 16px !important;
+  bottom: 16px !important;
+  z-index: 2147483647 !important;
+  width: 300px !important;
+  padding: 12px !important;
+  border-radius: 14px !important;
+  background: rgba(28, 28, 32, 0.96) !important;
+  color: #fff !important;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  font-size: 13px !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,.38) !important;
+  backdrop-filter: blur(8px) !important;
+}
+#catchat-rescuer-v030-panel .ccr-title {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  font-weight: 700 !important;
+  margin-bottom: 6px !important;
+}
+#catchat-rescuer-v030-panel #ccr-hide {
+  width: 24px !important;
+  height: 24px !important;
+  padding: 0 !important;
+  border-radius: 7px !important;
+}
+#catchat-rescuer-v030-panel .ccr-count {
+  opacity: .92 !important;
+  margin-bottom: 6px !important;
+}
+#catchat-rescuer-v030-panel .ccr-timers {
+  padding: 7px 8px !important;
+  border-radius: 10px !important;
+  background: rgba(255,255,255,.08) !important;
+  margin-bottom: 8px !important;
+  line-height: 1.45 !important;
+  font-size: 12px !important;
+}
+#catchat-rescuer-v030-panel .ccr-buttons {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 6px !important;
+}
+#catchat-rescuer-v030-panel button {
+  border: 0 !important;
+  border-radius: 9px !important;
+  padding: 7px 8px !important;
+  color: #111 !important;
+  background: #f4f4f5 !important;
+  cursor: pointer !important;
+  font-size: 12px !important;
+}
+#catchat-rescuer-v030-panel button:hover {
+  filter: brightness(.92) !important;
+}
+#catchat-rescuer-v030-panel .ccr-status {
+  margin-top: 8px !important;
+  opacity: .78 !important;
+  line-height: 1.35 !important;
+  font-size: 12px !important;
+}
