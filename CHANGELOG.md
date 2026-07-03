@@ -1,27 +1,42 @@
 # Changelog
 
-## v0.3.7-incremental-append（planned）
+## v0.3.7-state-export
 
-Planned low-risk enhancement release.
+Stage 1 of incremental append support.
 
-### Priority goals
+### Added
 
-- Generate `<archive>.rescue-state.json` after full export.
+- Generate `<archive>.rescue-state.json` from the current ordered messages.
 - Store tail anchors for the last 5–10 messages.
-- Add an incremental append flow that finds tail anchors from the bottom of the current conversation and appends only new messages.
-- Fail safely when anchors cannot be found; do not modify existing archives.
-- Add clearer Markdown date metadata: `date`, `exported_at`, `timezone`, and `message_timestamps_available`.
+- Add a standalone `导出 State` panel button.
+- Update MD / JSON export filenames to include the export date.
+- Add YAML front matter to Markdown exports.
+- Add Markdown metadata fields: `date`, `exported_at`, `timezone`, `message_timestamps_available`, `message_capture_timestamps_available`, and `rescue_state_file`.
+- Download a rescue-state file alongside both MD and JSON exports.
 
-### Non-goals
+### Notes
 
-- Do not rewrite the working scroll/capture logic.
-- Do not redesign the UI.
-- Do not add LLM-generated summaries yet.
-- Do not commit real private conversation exports.
+- Current DOM capture does not provide reliable original ChatGPT message timestamps.
+- `capturedAt` is plugin capture time, not original message time.
+- Markdown therefore sets `message_timestamps_available: false` and does not fabricate per-message dates.
+
+### Still planned
+
+- Read a previous `.rescue-state.json`.
+- Find tail anchors from the current conversation bottom.
+- Export only new tail messages.
+- Safely append / merge with previous archives.
+
+### Non-goals preserved
+
+- Did not rewrite the working scroll/capture logic.
+- Did not redesign the whole UI.
+- Did not add LLM-generated summaries.
+- Did not commit real private conversation exports.
 
 ## v0.3.6-syntax-hotfix
 
-Current uploaded version.
+Previously uploaded stable version.
 
 ### Notes
 
