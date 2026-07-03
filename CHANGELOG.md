@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.3.9-combined-incremental
+
+Incremental export now produces a usable combined full archive after a successful anchor match.
+
+### Added
+
+- After `导出增量` matches the previous tail anchors, export both patch files and combined full archive files.
+- Download incremental patch JSON / MD.
+- Download combined-full JSON / MD containing the current full captured message cache.
+- Download an updated `.rescue-state.json` for the next incremental round.
+- Status now reports old message count, new message count, combined message count, and match window size.
+
+### Notes
+
+- This still does not overwrite previous archive files.
+- This relies on the current local captured cache containing the old messages plus the new tail messages.
+- It is the practical path after a same-window continuation test.
+
 ## v0.3.8-incremental-patch
 
 First testable incremental export flow.
