@@ -1,0 +1,43 @@
+# private exports / real conversation archives
+exports/
+output/
+out/
+archives/
+archive/
+*.md.tmp
+*.json.tmp
+*.rescue-state.local.json
+
+# ChatGPT official data exports
+chatgpt-data*/
+GPT-DATA*/
+conversations*.json
+
+# assets from real conversations
+assets/
+**/assets/
+
+# compressed archives / local backups
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# JS tooling, if added later
+node_modules/
+dist/
+build/
+coverage/
+
+# Python tooling, if added later
+__pycache__/
+*.pyc
+.venv/
+venv/
