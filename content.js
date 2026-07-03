@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = "0.3.8-incremental-patch";
+  const VERSION = "0.3.9-combined-incremental";
   const STATE_SCHEMA_VERSION = 1;
   const PANEL_ID = "catchat-rescuer-v030-panel";
   const LEGACY_PANEL_ID = "catchat-rescuer-panel";
@@ -34,7 +34,7 @@
     autoScrolling: false,
     speedMode: "normal",
     exportOrder: "oldestFirst",
-    status: "v0.3.8：已支持增量补丁测试。",
+    status: "v0.3.9：增量后会导出合并完整归档。",
     captureStartedAtMs: null,
     totalElapsedMs: 0,
     timerRunning: false,
@@ -522,7 +522,7 @@
   }
 
   function baseExportName(exportedAt) {
-    return `catchat-${isoDate(exportedAt)}-v038-${state.id}-${isoForFilename(exportedAt)}`;
+    return `catchat-${isoDate(exportedAt)}-v039-${state.id}-${isoForFilename(exportedAt)}`;
   }
 
   function normalizeForAnchor(text) {
@@ -643,15 +643,8 @@
     return role === "user" ? "主人" : (role === "assistant" ? "猫猫" : role);
   }
 
-  async function exportJSON() {
-    await grabVisible("export");
-    const exportedAt = new Date().toISOString();
-    const baseName = baseExportName(exportedAt);
-    const rawMessages = orderedMessages();
-    const messages = rawMessages.map((m, i) => ({ index: i + 1, ...m }));
-    const jsonFilename = `${baseName}.json`;
-    const stateFilename = `${baseName}.rescue-state.json`;
-    const data = {
+  function buildFullJsonData(messages, exportedAt, extra = {}) {
+    return {
       exporterVersion: VERSION,
       exportedAt,
       date: isoDate(exportedAt),
@@ -670,26 +663,12 @@
       timerMode: "new auto-scroll run resets total timer; stop/natural end pauses timer",
       messageTimestampsAvailable: false,
       messageCaptureTimestampsAvailable: true,
-      rescueStateFile: stateFilename,
-      messages
+      ...extra,
+      messages: messages.map((m, i) => ({ index: i + 1, ...m }))
     };
-    state.status = `正在导出 JSON…｜${messages.length} 条`;
-    updatePanel(true);
-    await downloadQueued(jsonFilename, JSON.stringify(data, null, 2), "application/json;charset=utf-8");
-    state.status = "JSON 已发送下载，正在导出 State…";
-    updatePanel(true);
-    await downloadRescueState(rawMessages, exportedAt, baseName, { json: jsonFilename, rescue_state: stateFilename });
-    state.status = `已导出 JSON + State｜${messages.length} 条`;
-    updatePanel(true);
   }
 
-  async function exportMarkdown() {
-    await grabVisible("export");
-    const exportedAt = new Date().toISOString();
-    const baseName = baseExportName(exportedAt);
-    const messages = orderedMessages();
-    const mdFilename = `${baseName}.md`;
-    const stateFilename = `${baseName}.rescue-state.json`;
+  function buildFullMarkdown(messages, exportedAt, rescueStateFilename, extra = {}) {
     let md = "---\n";
     md += `title: ${yamlString(state.title)}\n`;
     md += `date: ${yamlString(isoDate(exportedAt))}\n`;
@@ -705,7 +684,8 @@
     md += `exporter_version: ${yamlString(VERSION)}\n`;
     md += "message_timestamps_available: false\n";
     md += "message_capture_timestamps_available: true\n";
-    md += `rescue_state_file: ${yamlString(stateFilename)}\n`;
+    md += `rescue_state_file: ${yamlString(rescueStateFilename)}\n`;
+    for (const [key, value] of Object.entries(extra)) md += `${key}: ${yamlString(value)}\n`;
     md += "---\n\n";
     md += `# ${escapeMd(state.title)}\n\n`;
     md += `- exporter_version: ${VERSION}\n`;
@@ -722,13 +702,42 @@
     md += `- timer_mode: new auto-scroll run resets total timer; stop/natural end pauses timer\n`;
     md += `- message_timestamps_available: false\n`;
     md += `- message_capture_timestamps_available: true\n`;
-    md += `- rescue_state_file: \`${stateFilename}\`\n\n`;
+    md += `- rescue_state_file: \`${rescueStateFilename}\`\n\n`;
     md += `> Note: message block headers use sequence numbers only. Original ChatGPT message timestamps are not available from the current DOM capture; capturedAt remains available in JSON and rescue-state anchors.\n\n`;
     for (let i = 0; i < messages.length; i++) {
       const m = messages[i];
       const index = String(i + 1).padStart(4, "0");
       md += `## ${roleLabel(m.role)}｜${index}\n\n${escapeMd(m.text)}\n\n`;
     }
+    return md;
+  }
+
+  async function exportJSON() {
+    await grabVisible("export");
+    const exportedAt = new Date().toISOString();
+    const baseName = baseExportName(exportedAt);
+    const rawMessages = orderedMessages();
+    const jsonFilename = `${baseName}.json`;
+    const stateFilename = `${baseName}.rescue-state.json`;
+    const data = buildFullJsonData(rawMessages, exportedAt, { rescueStateFile: stateFilename });
+    state.status = `正在导出 JSON…｜${rawMessages.length} 条`;
+    updatePanel(true);
+    await downloadQueued(jsonFilename, JSON.stringify(data, null, 2), "application/json;charset=utf-8");
+    state.status = "JSON 已发送下载，正在导出 State…";
+    updatePanel(true);
+    await downloadRescueState(rawMessages, exportedAt, baseName, { json: jsonFilename, rescue_state: stateFilename });
+    state.status = `已导出 JSON + State｜${rawMessages.length} 条`;
+    updatePanel(true);
+  }
+
+  async function exportMarkdown() {
+    await grabVisible("export");
+    const exportedAt = new Date().toISOString();
+    const baseName = baseExportName(exportedAt);
+    const messages = orderedMessages();
+    const mdFilename = `${baseName}.md`;
+    const stateFilename = `${baseName}.rescue-state.json`;
+    const md = buildFullMarkdown(messages, exportedAt, stateFilename);
     state.status = `正在导出 MD…｜${messages.length} 条`;
     updatePanel(true);
     await downloadQueued(mdFilename, md, "text/markdown;charset=utf-8");
@@ -836,8 +845,10 @@
     }
     const exportedAt = new Date().toISOString();
     const baseName = `${baseExportName(exportedAt)}-incremental`;
-    const jsonFilename = `${baseName}.json`;
-    const mdFilename = `${baseName}.md`;
+    const patchJsonFilename = `${baseName}.patch.json`;
+    const patchMdFilename = `${baseName}.patch.md`;
+    const combinedJsonFilename = `${baseName}.combined-full.json`;
+    const combinedMdFilename = `${baseName}.combined-full.md`;
     const stateFilename = `${baseName}.rescue-state.json`;
     const newMessages = currentMessages.slice(match.match_end_index + 1);
     const incrementalMessages = newMessages.map((m, i) => ({
@@ -845,7 +856,7 @@
       absoluteIndex: Number(previous.message_count || match.match_end_ordinal || 0) + i + 1,
       ...m
     }));
-    const jsonData = {
+    const patchJsonData = {
       exporterVersion: VERSION,
       exportedAt,
       date: isoDate(exportedAt),
@@ -862,25 +873,54 @@
       messageTimestampsAvailable: false,
       messageCaptureTimestampsAvailable: true,
       updatedRescueStateFile: stateFilename,
+      combinedFullJsonFile: combinedJsonFilename,
+      combinedFullMarkdownFile: combinedMdFilename,
       messages: incrementalMessages
     };
-    const md = buildIncrementalMarkdown(newMessages, previous, match, exportedAt, { json: jsonFilename, markdown: mdFilename, state: stateFilename });
-    state.status = `已匹配尾巴锚点｜新增 ${newMessages.length} 条｜正在导出补丁…`;
+    const combinedJsonData = buildFullJsonData(currentMessages, exportedAt, {
+      mode: "combined_full_after_incremental_match",
+      previousStateFile: state.previousRescueStateName || "loaded rescue-state",
+      previousMessageCount: previous.message_count || null,
+      incrementalNewMessageCount: newMessages.length,
+      incrementalMatch: match,
+      rescueStateFile: stateFilename,
+      incrementalPatchJsonFile: patchJsonFilename,
+      incrementalPatchMarkdownFile: patchMdFilename
+    });
+    const patchMd = buildIncrementalMarkdown(newMessages, previous, match, exportedAt, {
+      json: patchJsonFilename,
+      markdown: patchMdFilename,
+      state: stateFilename
+    });
+    const combinedMd = buildFullMarkdown(currentMessages, exportedAt, stateFilename, {
+      mode: "combined_full_after_incremental_match",
+      previous_state_file: state.previousRescueStateName || "loaded rescue-state",
+      previous_message_count: String(previous.message_count || ""),
+      incremental_new_message_count: String(newMessages.length),
+      incremental_patch_json_file: patchJsonFilename,
+      incremental_patch_markdown_file: patchMdFilename
+    });
+    state.status = `已匹配尾巴｜旧 ${previous.message_count ?? "?"}｜新增 ${newMessages.length}｜合并 ${currentMessages.length}｜正在导出…`;
     updatePanel(true);
-    await downloadQueued(jsonFilename, JSON.stringify(jsonData, null, 2), "application/json;charset=utf-8");
-    await downloadQueued(mdFilename, md, "text/markdown;charset=utf-8");
+    await downloadQueued(patchJsonFilename, JSON.stringify(patchJsonData, null, 2), "application/json;charset=utf-8");
+    await downloadQueued(patchMdFilename, patchMd, "text/markdown;charset=utf-8");
+    await downloadQueued(combinedJsonFilename, JSON.stringify(combinedJsonData, null, 2), "application/json;charset=utf-8");
+    await downloadQueued(combinedMdFilename, combinedMd, "text/markdown;charset=utf-8");
     await downloadRescueState(currentMessages, exportedAt, baseName, {
-      incremental_json: jsonFilename,
-      incremental_markdown: mdFilename,
+      incremental_patch_json: patchJsonFilename,
+      incremental_patch_markdown: patchMdFilename,
+      combined_full_json: combinedJsonFilename,
+      combined_full_markdown: combinedMdFilename,
       rescue_state: stateFilename
     }, {
-      mode: "incremental_patch_update",
+      mode: "combined_full_after_incremental_match",
       previous_state_file: state.previousRescueStateName || "loaded rescue-state",
       previous_message_count: previous.message_count || null,
       incremental_new_message_count: newMessages.length,
+      combined_message_count: currentMessages.length,
       incremental_match: match
     });
-    state.status = `增量补丁已导出｜新增 ${newMessages.length} 条｜匹配窗口 ${match.window_size}`;
+    state.status = `增量完成｜旧 ${previous.message_count ?? "?"}｜新增 ${newMessages.length}｜合并 ${currentMessages.length}｜匹配 ${match.window_size}`;
     updatePanel(true);
   }
 
@@ -891,7 +931,7 @@
     panel.id = PANEL_ID;
     panel.innerHTML = `
       <div class="ccr-title">
-        <span>猫茶抢救器 v0.3.8</span>
+        <span>猫茶抢救器 v0.3.9</span>
         <button id="ccr-hide" title="Hide">×</button>
       </div>
       <div class="ccr-count">已捕获：<span id="ccr-count">0</span></div>
@@ -916,7 +956,7 @@
         <button id="ccr-clear">清空插件缓存</button>
         <input id="ccr-state-file" type="file" accept="application/json,.json" style="display:none" />
       </div>
-      <div class="ccr-status" id="ccr-status">v0.3.8：已支持增量补丁测试。</div>
+      <div class="ccr-status" id="ccr-status">v0.3.9：增量后会导出合并完整归档。</div>
     `;
     document.body.appendChild(panel);
     const stateFileInput = panel.querySelector("#ccr-state-file");
@@ -986,7 +1026,7 @@
     }
     startPanelTimer();
     updatePanel(true);
-    console.log("[CatChat Rescuer v0.3.8] incremental patch loaded.");
+    console.log("[CatChat Rescuer v0.3.9] combined incremental loaded.");
   }
 
   init();
