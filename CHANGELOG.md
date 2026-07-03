@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.3.8-incremental-patch
+
+First testable incremental export flow.
+
+### Added
+
+- Add `载入 State` button.
+- Add `导出增量` button.
+- Read a previous `.rescue-state.json` through a local file picker.
+- Match previous tail anchors against the current captured message cache.
+- Export only messages after the matched tail anchor as an incremental patch.
+- Download incremental `.json`, incremental `.md`, and an updated `.rescue-state.json`.
+- Fail safely when the previous tail anchor cannot be found.
+
+### Notes
+
+- This does not overwrite or directly append to previous archive files.
+- Browser-side local-file overwrite is intentionally avoided for now.
+- The incremental output is a patch package that can be manually merged or used by later tooling.
+
 ## v0.3.7-state-export
 
 Stage 1 of incremental append support.
@@ -19,13 +39,6 @@ Stage 1 of incremental append support.
 - Current DOM capture does not provide reliable original ChatGPT message timestamps.
 - `capturedAt` is plugin capture time, not original message time.
 - Markdown therefore sets `message_timestamps_available: false` and does not fabricate per-message dates.
-
-### Still planned
-
-- Read a previous `.rescue-state.json`.
-- Find tail anchors from the current conversation bottom.
-- Export only new tail messages.
-- Safely append / merge with previous archives.
 
 ### Non-goals preserved
 
