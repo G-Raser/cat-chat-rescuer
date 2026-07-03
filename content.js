@@ -610,21 +610,27 @@
     };
   }
 
-  function downloadRescueState(messages, exportedAt, baseName, outputFiles = {}) {
-    const rescueState = buildRescueState(messages, exportedAt, outputFiles);
-    download(`${baseName}.rescue-state.json`, JSON.stringify(rescueState, null, 2), "application/json;charset=utf-8");
-    return rescueState;
-  }
-
   function download(filename, content, type) {
     const blob = new Blob([content], { type });
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    a.href = url;
     a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  }
+
+  async function downloadQueued(filename, content, type) {
+    download(filename, content, type);
+    await sleep(800);
+  }
+
+  async function downloadRescueState(messages, exportedAt, baseName, outputFiles = {}) {
+    const rescueState = buildRescueState(messages, exportedAt, outputFiles);
+    await downloadQueued(`${baseName}.rescue-state.json`, JSON.stringify(rescueState, null, 2), "application/json;charset=utf-8");
+    return rescueState;
   }
 
   async function exportJSON() {
@@ -657,8 +663,12 @@
       rescueStateFile: stateFilename,
       messages
     };
-    download(jsonFilename, JSON.stringify(data, null, 2), "application/json;charset=utf-8");
-    downloadRescueState(rawMessages, exportedAt, baseName, { json: jsonFilename, rescue_state: stateFilename });
+    state.status = `正在导出 JSON…｜${messages.length} 条`;
+    updatePanel(true);
+    await downloadQueued(jsonFilename, JSON.stringify(data, null, 2), "application/json;charset=utf-8");
+    state.status = "JSON 已发送下载，正在导出 State…";
+    updatePanel(true);
+    await downloadRescueState(rawMessages, exportedAt, baseName, { json: jsonFilename, rescue_state: stateFilename });
     state.status = `已导出 JSON + State｜${messages.length} 条`;
     updatePanel(true);
   }
@@ -710,8 +720,12 @@
       const index = String(i + 1).padStart(4, "0");
       md += `## ${who}｜${index}\n\n${escapeMd(m.text)}\n\n`;
     }
-    download(mdFilename, md, "text/markdown;charset=utf-8");
-    downloadRescueState(messages, exportedAt, baseName, { markdown: mdFilename, rescue_state: stateFilename });
+    state.status = `正在导出 MD…｜${messages.length} 条`;
+    updatePanel(true);
+    await downloadQueued(mdFilename, md, "text/markdown;charset=utf-8");
+    state.status = "MD 已发送下载，正在导出 State…";
+    updatePanel(true);
+    await downloadRescueState(messages, exportedAt, baseName, { markdown: mdFilename, rescue_state: stateFilename });
     state.status = `已导出 MD + State｜${messages.length} 条`;
     updatePanel(true);
   }
@@ -721,7 +735,7 @@
     const exportedAt = new Date().toISOString();
     const baseName = baseExportName(exportedAt);
     const messages = orderedMessages();
-    downloadRescueState(messages, exportedAt, baseName, { rescue_state: `${baseName}.rescue-state.json` });
+    await downloadRescueState(messages, exportedAt, baseName, { rescue_state: `${baseName}.rescue-state.json` });
     state.status = `已导出 State｜${messages.length} 条｜锚点 ${Math.min(10, messages.length)} 条`;
     updatePanel(true);
   }
