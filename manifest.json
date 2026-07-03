@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CatChat Rescuer Clean",
-  "version": "0.3.8",
-  "description": "ChatGPT conversation capture with rescue-state and incremental patch export.",
+  "version": "0.3.9",
+  "description": "ChatGPT conversation capture with rescue-state, incremental patch, and combined full export.",
   "permissions": [
     "storage",
     "scripting",
