@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CatChat Rescuer Clean",
-  "version": "0.3.6",
-  "description": "ChatGPT conversation capture syntax hotfix for timer controls.",
+  "version": "0.3.7",
+  "description": "ChatGPT conversation capture with rescue-state export and Markdown date metadata.",
   "permissions": [
     "storage",
     "scripting",
