@@ -1,15 +1,12 @@
 (() => {
-  const VERSION = "0.3.7-state-export";
+  const VERSION = "0.3.8-incremental-patch";
   const STATE_SCHEMA_VERSION = 1;
   const PANEL_ID = "catchat-rescuer-v030-panel";
   const LEGACY_PANEL_ID = "catchat-rescuer-panel";
   const GLOBAL_KEY = "__catChatRescuer_v030_loaded";
-  // Keep the v0.3.6 DB name for backward-compatible local cache loading.
   const DB_NAME = "CatChatRescuerDB_v0_3_6_syntax_hotfix";
   const STORE = "conversations";
 
-  // Remove old visible panel from v0.2.x lineage. Old timers may still exist,
-  // but without the old panel they cannot keep flickering text.
   document.getElementById(LEGACY_PANEL_ID)?.remove();
 
   if (window[GLOBAL_KEY]) {
@@ -37,7 +34,7 @@
     autoScrolling: false,
     speedMode: "normal",
     exportOrder: "oldestFirst",
-    status: "v0.3.7：已支持 State 与日期元数据。",
+    status: "v0.3.8：已支持增量补丁测试。",
     captureStartedAtMs: null,
     totalElapsedMs: 0,
     timerRunning: false,
@@ -47,7 +44,9 @@
     autoStep: 0,
     lastTopDistance: null,
     lastScrollDirection: "unknown",
-    lastAutoEnded: true
+    lastAutoEnded: true,
+    previousRescueState: null,
+    previousRescueStateName: ""
   };
 
   let scrollTimer = null;
@@ -118,9 +117,7 @@
   }
 
   function totalElapsedMs() {
-    if (state.timerRunning && state.timerRunStartedAtMs) {
-      return state.totalElapsedMs + (nowMs() - state.timerRunStartedAtMs);
-    }
+    if (state.timerRunning && state.timerRunStartedAtMs) return state.totalElapsedMs + (nowMs() - state.timerRunStartedAtMs);
     return state.totalElapsedMs || 0;
   }
 
@@ -154,9 +151,7 @@
   }
 
   function orderedMessages() {
-    if (state.exportOrder === "captureOrder") {
-      return [...state.map.values()].sort((a, b) => (a.captureSeq || 0) - (b.captureSeq || 0));
-    }
+    if (state.exportOrder === "captureOrder") return [...state.map.values()].sort((a, b) => (a.captureSeq || 0) - (b.captureSeq || 0));
     const seen = new Set();
     const out = [];
     for (const id of state.order) {
@@ -323,7 +318,6 @@
   function mergeVisibleBatch(batch) {
     const batchIds = batch.map(m => m.id);
     let added = 0;
-
     for (const m of batch) {
       if (!state.map.has(m.id)) {
         state.captureSeq += 1;
@@ -331,13 +325,11 @@
         added++;
       }
     }
-
     if (batchIds.length === 0) return added;
     if (state.order.length === 0) {
       state.order = [...batchIds];
       return added;
     }
-
     const hasAnchor = batchIds.some(id => state.order.includes(id));
     if (!hasAnchor) {
       if (state.lastScrollDirection === "up") state.order = [...batchIds, ...state.order];
@@ -345,7 +337,6 @@
       state.order = [...new Set(state.order)];
       return added;
     }
-
     let order = state.order.slice();
     let prevKnown = null;
     for (let i = 0; i < batchIds.length; i++) {
@@ -365,7 +356,6 @@
       else order.push(id);
       prevKnown = id;
     }
-
     state.order = [...new Set(order)];
     return added;
   }
@@ -374,26 +364,19 @@
     if (grabLock) return 0;
     if (reason !== "export") startTotalTimer(false);
     grabLock = true;
-
     if (reason !== "scroll") {
       state.status = reason === "auto" ? "自动上滚捕获中…" : "正在抓当前屏…";
       updatePanel();
     }
-
     await sleep(40);
     updateScrollDirection();
     const batch = extractMessagesFromDOM();
     const added = mergeVisibleBatch(batch);
     if (added > 0) await saveRecord().catch(console.error);
-
     if (reason === "scroll") {
       if (added > 0) state.status = `手滑捕获：新增 ${added} 条｜累计 ${state.map.size}`;
-    } else if (reason === "auto") {
-      state.status = `自动捕获：新增 ${added} 条｜累计 ${state.map.size}`;
-    } else {
-      state.status = `本次新增 ${added} 条｜累计 ${state.map.size}`;
-    }
-
+    } else if (reason === "auto") state.status = `自动捕获：新增 ${added} 条｜累计 ${state.map.size}`;
+    else state.status = `本次新增 ${added} 条｜累计 ${state.map.size}`;
     updatePanel();
     grabLock = false;
     return added;
@@ -426,7 +409,6 @@
 
   async function autoScrollUp() {
     if (state.autoScrolling) return;
-    // A new automatic run starts a fresh timer session.
     startTotalTimer(true);
     state.autoScrolling = true;
     state.lastAutoEnded = false;
@@ -434,35 +416,27 @@
     state.lastAutoDurationMs = 0;
     state.autoStep = 0;
     updatePanel();
-
     let noMovement = 0;
     const maxSteps = 3000;
-
     for (let i = 1; i <= maxSteps && state.autoScrolling; i++) {
       state.autoStep = i;
       const before = posSnapshot();
       const beforeTop = topDistance();
       const added = await grabVisible("auto");
-
       scrollUpOneStep();
       state.status = `上滚中：第 ${i} 步｜新增 ${added}｜累计 ${state.map.size}`;
       updatePanel();
-
       await sleep(speedConfig().delay);
-
       const after = posSnapshot();
       const afterTop = topDistance();
-
       if (after === before || Math.abs(afterTop - beforeTop) < 2) noMovement += 1;
       else noMovement = 0;
-
       if (afterTop <= 5 && noMovement >= 3) break;
       if (noMovement >= 12) {
         state.status = "连续多次滚不动，已停止；可手动滚一下再继续";
         break;
       }
     }
-
     await grabVisible("auto");
     await saveRecord().catch(console.error);
     state.autoScrolling = false;
@@ -503,7 +477,6 @@
     state.autoStartedAtMs = null;
     state.lastAutoDurationMs = 0;
     state.autoStep = 0;
-    state.autoScrolling = false;
     state.lastAutoEnded = true;
     state.status = "计时已归零；下一次抓取/上滚后重新开始";
     updatePanel(true);
@@ -512,7 +485,6 @@
 
   async function clearCurrent() {
     if (!confirm("只清空【插件已捕获的本页缓存】，不会删除 ChatGPT 云端聊天记录。确定清空吗？")) return;
-
     stopTotalTimer();
     state.autoScrolling = false;
     state.map.clear();
@@ -527,10 +499,7 @@
     state.autoStep = 0;
     state.lastTopDistance = null;
     state.lastScrollDirection = "unknown";
-
-    // Prevent immediate scroll watcher re-capturing visible DOM right after clear.
     suppressScrollGrabUntilMs = nowMs() + 3000;
-
     await deleteRecord().catch(console.error);
     state.status = "已清空插件捕获缓存；3秒内不会自动重抓";
     updatePanel(true);
@@ -553,7 +522,7 @@
   }
 
   function baseExportName(exportedAt) {
-    return `catchat-${isoDate(exportedAt)}-v037-${state.id}-${isoForFilename(exportedAt)}`;
+    return `catchat-${isoDate(exportedAt)}-v038-${state.id}-${isoForFilename(exportedAt)}`;
   }
 
   function normalizeForAnchor(text) {
@@ -580,7 +549,43 @@
     };
   }
 
-  function buildRescueState(messages, exportedAt, outputFiles = {}) {
+  function sameAnchor(saved, current) {
+    return !!saved && !!current && saved.role === current.role && saved.normalized_hash === current.normalized_hash;
+  }
+
+  function findTailAnchorMatch(messages, rescueState) {
+    const savedAnchors = Array.isArray(rescueState?.tail_anchors) ? rescueState.tail_anchors : [];
+    if (!savedAnchors.length || !messages.length) return null;
+    const currentAnchors = messages.map((m, i) => messageAnchor(m, i + 1));
+    const maxSize = Math.min(savedAnchors.length, currentAnchors.length);
+    for (let size = maxSize; size >= 1; size--) {
+      const savedWindow = savedAnchors.slice(savedAnchors.length - size);
+      for (let start = currentAnchors.length - size; start >= 0; start--) {
+        let ok = true;
+        for (let i = 0; i < size; i++) {
+          if (!sameAnchor(savedWindow[i], currentAnchors[start + i])) {
+            ok = false;
+            break;
+          }
+        }
+        if (ok) {
+          return {
+            window_size: size,
+            match_start_index: start,
+            match_end_index: start + size - 1,
+            match_start_ordinal: start + 1,
+            match_end_ordinal: start + size,
+            saved_last_ordinal: savedAnchors[savedAnchors.length - 1]?.ordinal || null,
+            current_anchor: currentAnchors[start + size - 1],
+            saved_anchor: savedWindow[size - 1]
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function buildRescueState(messages, exportedAt, outputFiles = {}, extra = {}) {
     const anchorWindowSize = Math.min(10, messages.length);
     const start = Math.max(0, messages.length - anchorWindowSize);
     const tailAnchors = messages.slice(start).map((message, i) => messageAnchor(message, start + i + 1));
@@ -606,7 +611,8 @@
       message_timestamps_available: false,
       message_capture_timestamps_available: true,
       output_files: outputFiles,
-      notes: "Message-level original timestamps are not available from the current DOM capture. captured_at is plugin capture time, not the original ChatGPT message time."
+      notes: "Message-level original timestamps are not available from the current DOM capture. captured_at is plugin capture time, not the original ChatGPT message time.",
+      ...extra
     };
   }
 
@@ -627,10 +633,14 @@
     await sleep(800);
   }
 
-  async function downloadRescueState(messages, exportedAt, baseName, outputFiles = {}) {
-    const rescueState = buildRescueState(messages, exportedAt, outputFiles);
+  async function downloadRescueState(messages, exportedAt, baseName, outputFiles = {}, extra = {}) {
+    const rescueState = buildRescueState(messages, exportedAt, outputFiles, extra);
     await downloadQueued(`${baseName}.rescue-state.json`, JSON.stringify(rescueState, null, 2), "application/json;charset=utf-8");
     return rescueState;
+  }
+
+  function roleLabel(role) {
+    return role === "user" ? "主人" : (role === "assistant" ? "猫猫" : role);
   }
 
   async function exportJSON() {
@@ -716,9 +726,8 @@
     md += `> Note: message block headers use sequence numbers only. Original ChatGPT message timestamps are not available from the current DOM capture; capturedAt remains available in JSON and rescue-state anchors.\n\n`;
     for (let i = 0; i < messages.length; i++) {
       const m = messages[i];
-      const who = m.role === "user" ? "主人" : (m.role === "assistant" ? "猫猫" : m.role);
       const index = String(i + 1).padStart(4, "0");
-      md += `## ${who}｜${index}\n\n${escapeMd(m.text)}\n\n`;
+      md += `## ${roleLabel(m.role)}｜${index}\n\n${escapeMd(m.text)}\n\n`;
     }
     state.status = `正在导出 MD…｜${messages.length} 条`;
     updatePanel(true);
@@ -740,15 +749,149 @@
     updatePanel(true);
   }
 
+  function readFileText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("File read failed"));
+      reader.readAsText(file, "utf-8");
+    });
+  }
+
+  async function loadStateFile(file) {
+    if (!file) return;
+    try {
+      const text = await readFileText(file);
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed.tail_anchors)) throw new Error("Missing tail_anchors");
+      if (parsed.conversation_id && parsed.conversation_id !== state.id) {
+        const ok = confirm(`State conversation_id 与当前窗口不同。\nState: ${parsed.conversation_id}\nCurrent: ${state.id}\n仍然载入吗？`);
+        if (!ok) return;
+      }
+      state.previousRescueState = parsed;
+      state.previousRescueStateName = file.name;
+      state.status = `已载入 State：${file.name}｜旧消息 ${parsed.message_count ?? "?"}｜锚点 ${parsed.tail_anchors.length}`;
+      updatePanel(true);
+    } catch (e) {
+      console.error("[CatChat Rescuer] state load failed", e);
+      state.status = `State 载入失败：${e.message || e}`;
+      updatePanel(true);
+    }
+  }
+
+  function buildIncrementalMarkdown(newMessages, previousState, match, exportedAt, filenames) {
+    let md = "---\n";
+    md += `title: ${yamlString(`${state.title}｜incremental patch`)}\n`;
+    md += `date: ${yamlString(isoDate(exportedAt))}\n`;
+    md += `timezone: ${yamlString("UTC")}\n`;
+    md += `exported_at: ${yamlString(exportedAt)}\n`;
+    md += `conversation_id: ${yamlString(state.id)}\n`;
+    md += `mode: ${yamlString("incremental_patch")}\n`;
+    md += `previous_state_file: ${yamlString(state.previousRescueStateName || "loaded rescue-state")}\n`;
+    md += `previous_message_count: ${Number(previousState.message_count || 0)}\n`;
+    md += `new_message_count: ${newMessages.length}\n`;
+    md += `match_window_size: ${match.window_size}\n`;
+    md += `match_end_ordinal: ${match.match_end_ordinal}\n`;
+    md += `updated_rescue_state_file: ${yamlString(filenames.state)}\n`;
+    md += "message_timestamps_available: false\n";
+    md += "message_capture_timestamps_available: true\n";
+    md += "---\n\n";
+    md += `# ${escapeMd(state.title)}｜incremental patch\n\n`;
+    md += `- mode: incremental_patch\n`;
+    md += `- previous_state_file: ${state.previousRescueStateName || "loaded rescue-state"}\n`;
+    md += `- previous_message_count: ${Number(previousState.message_count || 0)}\n`;
+    md += `- current_message_count: ${orderedMessages().length}\n`;
+    md += `- new_message_count: ${newMessages.length}\n`;
+    md += `- match_window_size: ${match.window_size}\n`;
+    md += `- match_end_ordinal: ${match.match_end_ordinal}\n`;
+    md += `- exported_at: ${exportedAt}\n\n`;
+    if (!newMessages.length) {
+      md += `> No new messages were found after the matched tail anchor.\n\n`;
+      return md;
+    }
+    const baseIndex = Number(previousState.message_count || match.match_end_ordinal || 0);
+    for (let i = 0; i < newMessages.length; i++) {
+      const m = newMessages[i];
+      const ordinal = String(baseIndex + i + 1).padStart(4, "0");
+      md += `## ${roleLabel(m.role)}｜${ordinal}\n\n${escapeMd(m.text)}\n\n`;
+    }
+    return md;
+  }
+
+  async function exportIncrementalPatch() {
+    await grabVisible("export");
+    const previous = state.previousRescueState;
+    if (!previous) {
+      state.status = "请先点击「载入 State」选择上一次完整导出的 .rescue-state.json";
+      updatePanel(true);
+      return;
+    }
+    const currentMessages = orderedMessages();
+    const match = findTailAnchorMatch(currentMessages, previous);
+    if (!match) {
+      state.status = "增量失败：找不到旧尾巴锚点，未导出补丁";
+      updatePanel(true);
+      alert("增量失败：找不到旧尾巴锚点。\n请确认载入的是同一窗口的 rescue-state，或先在当前窗口底部抓当前屏。\n没有导出补丁文件。");
+      return;
+    }
+    const exportedAt = new Date().toISOString();
+    const baseName = `${baseExportName(exportedAt)}-incremental`;
+    const jsonFilename = `${baseName}.json`;
+    const mdFilename = `${baseName}.md`;
+    const stateFilename = `${baseName}.rescue-state.json`;
+    const newMessages = currentMessages.slice(match.match_end_index + 1);
+    const incrementalMessages = newMessages.map((m, i) => ({
+      incrementalIndex: i + 1,
+      absoluteIndex: Number(previous.message_count || match.match_end_ordinal || 0) + i + 1,
+      ...m
+    }));
+    const jsonData = {
+      exporterVersion: VERSION,
+      exportedAt,
+      date: isoDate(exportedAt),
+      timezone: "UTC",
+      mode: "incremental_patch",
+      conversationId: state.id,
+      title: state.title,
+      url: state.url,
+      previousStateFile: state.previousRescueStateName || "loaded rescue-state",
+      previousMessageCount: previous.message_count || null,
+      currentMessageCount: currentMessages.length,
+      newMessageCount: newMessages.length,
+      match,
+      messageTimestampsAvailable: false,
+      messageCaptureTimestampsAvailable: true,
+      updatedRescueStateFile: stateFilename,
+      messages: incrementalMessages
+    };
+    const md = buildIncrementalMarkdown(newMessages, previous, match, exportedAt, { json: jsonFilename, markdown: mdFilename, state: stateFilename });
+    state.status = `已匹配尾巴锚点｜新增 ${newMessages.length} 条｜正在导出补丁…`;
+    updatePanel(true);
+    await downloadQueued(jsonFilename, JSON.stringify(jsonData, null, 2), "application/json;charset=utf-8");
+    await downloadQueued(mdFilename, md, "text/markdown;charset=utf-8");
+    await downloadRescueState(currentMessages, exportedAt, baseName, {
+      incremental_json: jsonFilename,
+      incremental_markdown: mdFilename,
+      rescue_state: stateFilename
+    }, {
+      mode: "incremental_patch_update",
+      previous_state_file: state.previousRescueStateName || "loaded rescue-state",
+      previous_message_count: previous.message_count || null,
+      incremental_new_message_count: newMessages.length,
+      incremental_match: match
+    });
+    state.status = `增量补丁已导出｜新增 ${newMessages.length} 条｜匹配窗口 ${match.window_size}`;
+    updatePanel(true);
+  }
+
   function makePanel() {
     document.getElementById(LEGACY_PANEL_ID)?.remove();
     document.getElementById(PANEL_ID)?.remove();
-
     const panel = document.createElement("div");
     panel.id = PANEL_ID;
     panel.innerHTML = `
       <div class="ccr-title">
-        <span>猫茶抢救器 v0.3.7</span>
+        <span>猫茶抢救器 v0.3.8</span>
         <button id="ccr-hide" title="Hide">×</button>
       </div>
       <div class="ccr-count">已捕获：<span id="ccr-count">0</span></div>
@@ -767,13 +910,16 @@
         <button id="ccr-json">导出 JSON</button>
         <button id="ccr-md">导出 MD</button>
         <button id="ccr-state">导出 State</button>
+        <button id="ccr-load-state">载入 State</button>
+        <button id="ccr-incremental">导出增量</button>
         <button id="ccr-reset">重置计时</button>
         <button id="ccr-clear">清空插件缓存</button>
+        <input id="ccr-state-file" type="file" accept="application/json,.json" style="display:none" />
       </div>
-      <div class="ccr-status" id="ccr-status">v0.3.7：已支持 State 与日期元数据。</div>
+      <div class="ccr-status" id="ccr-status">v0.3.8：已支持增量补丁测试。</div>
     `;
     document.body.appendChild(panel);
-
+    const stateFileInput = panel.querySelector("#ccr-state-file");
     panel.querySelector("#ccr-hide").onclick = () => { panel.style.display = "none"; };
     panel.querySelector("#ccr-grab").onclick = () => grabVisible("manual");
     panel.querySelector("#ccr-watch").onclick = () => toggleScrollWatch();
@@ -785,8 +931,11 @@
     panel.querySelector("#ccr-json").onclick = () => exportJSON();
     panel.querySelector("#ccr-md").onclick = () => exportMarkdown();
     panel.querySelector("#ccr-state").onclick = () => exportStateOnly();
+    panel.querySelector("#ccr-load-state").onclick = () => stateFileInput.click();
+    panel.querySelector("#ccr-incremental").onclick = () => exportIncrementalPatch();
     panel.querySelector("#ccr-reset").onclick = () => resetTimer();
     panel.querySelector("#ccr-clear").onclick = () => clearCurrent();
+    stateFileInput.onchange = () => loadStateFile(stateFileInput.files?.[0]);
   }
 
   function setText(id, value, force = false) {
@@ -801,7 +950,6 @@
   function updatePanel(force = false) {
     setText("ccr-count", String(state.map.size), force);
     setText("ccr-status", state.status, force);
-
     const total = fmtDuration(totalElapsedMs());
     const autoRunning = state.autoStartedAtMs ? nowMs() - state.autoStartedAtMs : state.lastAutoDurationMs;
     setText("ccr-total", total, force);
@@ -822,7 +970,6 @@
   async function init() {
     makePanel();
     installListeners();
-
     const old = await loadRecord().catch(() => null);
     if (old?.messages?.length) {
       for (const m of old.messages) state.map.set(m.id, m);
@@ -837,10 +984,9 @@
       state.lastAutoEnded = old.lastAutoEnded ?? true;
       state.status = "已载入本地缓存；监听仍默认关";
     }
-
     startPanelTimer();
     updatePanel(true);
-    console.log("[CatChat Rescuer v0.3.7] state export loaded.");
+    console.log("[CatChat Rescuer v0.3.8] incremental patch loaded.");
   }
 
   init();
