@@ -1,6 +1,7 @@
 (() => {
-  const VERSION = "0.3.9-combined-incremental";
+  const VERSION = "0.4.0-state-first-incremental-scan";
   const STATE_SCHEMA_VERSION = 1;
+  const MAX_INCREMENTAL_SCAN_STEPS = 900;
   const PANEL_ID = "catchat-rescuer-v030-panel";
   const LEGACY_PANEL_ID = "catchat-rescuer-panel";
   const GLOBAL_KEY = "__catChatRescuer_v030_loaded";
@@ -34,7 +35,7 @@
     autoScrolling: false,
     speedMode: "normal",
     exportOrder: "oldestFirst",
-    status: "v0.3.9：增量后会导出合并完整归档。",
+    status: "v0.4.0：请先载入 State，再增量扫描。",
     captureStartedAtMs: null,
     totalElapsedMs: 0,
     timerRunning: false,
@@ -280,6 +281,16 @@
     return step;
   }
 
+  function scrollToBottom() {
+    const candidates = scrollableCandidates();
+    for (const el of candidates) el.scrollTop = el.scrollHeight;
+    const doc = document.scrollingElement || document.documentElement;
+    if (doc) doc.scrollTop = doc.scrollHeight;
+    window.scrollTo(0, document.body.scrollHeight || document.documentElement.scrollHeight || 99999999);
+    state.lastTopDistance = null;
+    state.lastScrollDirection = "down";
+  }
+
   function extractMessagesFromDOM() {
     const nodes = [...document.querySelectorAll("[data-message-author-role]")];
     const out = [];
@@ -522,7 +533,7 @@
   }
 
   function baseExportName(exportedAt) {
-    return `catchat-${isoDate(exportedAt)}-v039-${state.id}-${isoForFilename(exportedAt)}`;
+    return `catchat-${isoDate(exportedAt)}-v040-${state.id}-${isoForFilename(exportedAt)}`;
   }
 
   function normalizeForAnchor(text) {
@@ -779,7 +790,7 @@
       }
       state.previousRescueState = parsed;
       state.previousRescueStateName = file.name;
-      state.status = `已载入 State：${file.name}｜旧消息 ${parsed.message_count ?? "?"}｜锚点 ${parsed.tail_anchors.length}`;
+      state.status = `已载入 State：${file.name}｜旧消息 ${parsed.message_count ?? "?"}｜锚点 ${parsed.tail_anchors.length}｜可点增量扫描`;
       updatePanel(true);
     } catch (e) {
       console.error("[CatChat Rescuer] state load failed", e);
@@ -795,7 +806,7 @@
     md += `timezone: ${yamlString("UTC")}\n`;
     md += `exported_at: ${yamlString(exportedAt)}\n`;
     md += `conversation_id: ${yamlString(state.id)}\n`;
-    md += `mode: ${yamlString("incremental_patch")}\n`;
+    md += `mode: ${yamlString("incremental_patch") }\n`;
     md += `previous_state_file: ${yamlString(state.previousRescueStateName || "loaded rescue-state")}\n`;
     md += `previous_message_count: ${Number(previousState.message_count || 0)}\n`;
     md += `new_message_count: ${newMessages.length}\n`;
@@ -827,22 +838,67 @@
     return md;
   }
 
+  async function scanForIncrementalMatch(previous) {
+    state.autoScrolling = true;
+    state.lastAutoEnded = false;
+    state.autoStartedAtMs = nowMs();
+    state.autoStep = 0;
+    startTotalTimer(false);
+    suppressScrollGrabUntilMs = nowMs() + 1000;
+    state.status = "增量扫描准备中：先跳到底部，再向上找旧尾巴锚点…";
+    updatePanel(true);
+    scrollToBottom();
+    await sleep(1200);
+    let match = null;
+    let noMovement = 0;
+    for (let i = 0; i <= MAX_INCREMENTAL_SCAN_STEPS && state.autoScrolling; i++) {
+      state.autoStep = i;
+      const before = posSnapshot();
+      const beforeTop = topDistance();
+      const added = await grabVisible("auto");
+      const currentMessages = orderedMessages();
+      match = findTailAnchorMatch(currentMessages, previous);
+      if (match) {
+        state.status = `已找到旧尾巴｜扫描 ${i} 步｜新增捕获 ${added}｜累计 ${state.map.size}`;
+        updatePanel(true);
+        break;
+      }
+      state.status = `增量扫描中：第 ${i + 1} 步｜新增 ${added}｜累计 ${state.map.size}｜继续向上找锚点`;
+      updatePanel();
+      scrollUpOneStep();
+      await sleep(speedConfig().delay);
+      const after = posSnapshot();
+      const afterTop = topDistance();
+      if (after === before || Math.abs(afterTop - beforeTop) < 2) noMovement += 1;
+      else noMovement = 0;
+      if (afterTop <= 5 && noMovement >= 3) break;
+      if (noMovement >= 12) break;
+    }
+    await saveRecord().catch(console.error);
+    if (state.autoStartedAtMs) state.lastAutoDurationMs = nowMs() - state.autoStartedAtMs;
+    state.autoStartedAtMs = null;
+    state.lastAutoEnded = true;
+    stopTotalTimer();
+    state.autoScrolling = false;
+    return match;
+  }
+
   async function exportIncrementalPatch() {
-    await grabVisible("export");
+    if (state.autoScrolling) return;
     const previous = state.previousRescueState;
     if (!previous) {
-      state.status = "请先点击「载入 State」选择上一次完整导出的 .rescue-state.json";
+      state.status = "请先点「载入 State」，再点「增量扫描」";
       updatePanel(true);
+      return;
+    }
+    const match = await scanForIncrementalMatch(previous);
+    if (!match) {
+      state.status = "增量失败：向上扫描后仍找不到旧尾巴锚点，未导出文件";
+      updatePanel(true);
+      alert("增量失败：向上扫描后仍找不到旧尾巴锚点。\n请确认载入的是同一窗口的 rescue-state；如果新增消息非常多，可以切到慢速/普通后再试。\n没有导出文件。");
       return;
     }
     const currentMessages = orderedMessages();
-    const match = findTailAnchorMatch(currentMessages, previous);
-    if (!match) {
-      state.status = "增量失败：找不到旧尾巴锚点，未导出补丁";
-      updatePanel(true);
-      alert("增量失败：找不到旧尾巴锚点。\n请确认载入的是同一窗口的 rescue-state，或先在当前窗口底部抓当前屏。\n没有导出补丁文件。");
-      return;
-    }
     const exportedAt = new Date().toISOString();
     const baseName = `${baseExportName(exportedAt)}-incremental`;
     const patchJsonFilename = `${baseName}.patch.json`;
@@ -861,7 +917,7 @@
       exportedAt,
       date: isoDate(exportedAt),
       timezone: "UTC",
-      mode: "incremental_patch",
+      mode: "incremental_patch_after_state_first_scan",
       conversationId: state.id,
       title: state.title,
       url: state.url,
@@ -878,7 +934,7 @@
       messages: incrementalMessages
     };
     const combinedJsonData = buildFullJsonData(currentMessages, exportedAt, {
-      mode: "combined_full_after_incremental_match",
+      mode: "combined_full_after_state_first_incremental_scan",
       previousStateFile: state.previousRescueStateName || "loaded rescue-state",
       previousMessageCount: previous.message_count || null,
       incrementalNewMessageCount: newMessages.length,
@@ -893,7 +949,7 @@
       state: stateFilename
     });
     const combinedMd = buildFullMarkdown(currentMessages, exportedAt, stateFilename, {
-      mode: "combined_full_after_incremental_match",
+      mode: "combined_full_after_state_first_incremental_scan",
       previous_state_file: state.previousRescueStateName || "loaded rescue-state",
       previous_message_count: String(previous.message_count || ""),
       incremental_new_message_count: String(newMessages.length),
@@ -913,7 +969,7 @@
       combined_full_markdown: combinedMdFilename,
       rescue_state: stateFilename
     }, {
-      mode: "combined_full_after_incremental_match",
+      mode: "combined_full_after_state_first_incremental_scan",
       previous_state_file: state.previousRescueStateName || "loaded rescue-state",
       previous_message_count: previous.message_count || null,
       incremental_new_message_count: newMessages.length,
@@ -931,7 +987,7 @@
     panel.id = PANEL_ID;
     panel.innerHTML = `
       <div class="ccr-title">
-        <span>猫茶抢救器 v0.3.9</span>
+        <span>猫茶抢救器 v0.4.0</span>
         <button id="ccr-hide" title="Hide">×</button>
       </div>
       <div class="ccr-count">已捕获：<span id="ccr-count">0</span></div>
@@ -951,12 +1007,12 @@
         <button id="ccr-md">导出 MD</button>
         <button id="ccr-state">导出 State</button>
         <button id="ccr-load-state">载入 State</button>
-        <button id="ccr-incremental">导出增量</button>
+        <button id="ccr-incremental">增量扫描</button>
         <button id="ccr-reset">重置计时</button>
         <button id="ccr-clear">清空插件缓存</button>
         <input id="ccr-state-file" type="file" accept="application/json,.json" style="display:none" />
       </div>
-      <div class="ccr-status" id="ccr-status">v0.3.9：增量后会导出合并完整归档。</div>
+      <div class="ccr-status" id="ccr-status">v0.4.0：请先载入 State，再增量扫描。</div>
     `;
     document.body.appendChild(panel);
     const stateFileInput = panel.querySelector("#ccr-state-file");
@@ -1022,11 +1078,11 @@
       state.timerRunStartedAtMs = null;
       state.speedMode = old.speedMode || "normal";
       state.lastAutoEnded = old.lastAutoEnded ?? true;
-      state.status = "已载入本地缓存；监听仍默认关";
+      state.status = "已载入本地缓存；监听仍默认关。增量请先载入 State";
     }
     startPanelTimer();
     updatePanel(true);
-    console.log("[CatChat Rescuer v0.3.9] combined incremental loaded.");
+    console.log("[CatChat Rescuer v0.4.0] state-first incremental scan loaded.");
   }
 
   init();
