@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.4.0-state-first-incremental-scan
+
+Corrects the incremental workflow to load state first, then scan from the current conversation bottom upward until the old tail anchors are found.
+
+### Added
+
+- Changed the incremental flow to state-first:
+  1. `载入 State`
+  2. `增量扫描`
+  3. auto-jump to bottom
+  4. capture while scrolling upward
+  5. stop once previous tail anchors are found
+- `增量扫描` can collect many screens of newly added messages, not only the current visible screen.
+- Preserves patch JSON / MD exports.
+- Preserves combined-full JSON / MD exports.
+- Preserves updated `.rescue-state.json` export.
+- The scan can be stopped with the existing stop button because it uses the same `autoScrolling` guard.
+
+### Notes
+
+- This still does not overwrite previous archive files.
+- It still benefits from local cache when available, but no longer conceptually relies on the user manually grabbing only the current screen.
+- If too many new messages were added and the old anchor is far above, switch to `慢速` or `普通` and retry.
+
 ## v0.3.9-combined-incremental
 
 Incremental export now produces a usable combined full archive after a successful anchor match.
