@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = "0.4.1-strict-anchor-scan";
+  const VERSION = "0.4.2-session-incremental-scan";
   const STATE_SCHEMA_VERSION = 1;
   const MIN_SAFE_ANCHOR_MATCH = 3;
   const MAX_INCREMENTAL_SCAN_STEPS = 900;
@@ -32,7 +32,7 @@
     autoScrolling: false,
     speedMode: "normal",
     exportOrder: "oldestFirst",
-    status: "v0.4.1：严格锚点扫描，未稳定匹配不导出。",
+    status: "v0.4.2：增量扫描只用本轮扫描缓存；合并完整归档需载入旧 JSON",
     captureStartedAtMs: null,
     totalElapsedMs: 0,
     timerRunning: false,
@@ -45,6 +45,8 @@
     lastAutoEnded: true,
     previousRescueState: null,
     previousRescueStateName: "",
+    previousFullJson: null,
+    previousFullJsonName: "",
     lastWeakMatch: null
   };
   let scrollTimer = null;
@@ -337,6 +339,80 @@
     state.order = [...new Set(order)];
     return added;
   }
+  function createScanSession() {
+    return {
+      map: new Map(),
+      order: [],
+      captureSeq: 0,
+      startedAt: new Date().toISOString(),
+      direction: "up"
+    };
+  }
+  function mergeBatchIntoScanSession(scanSession, batch, direction = "up") {
+    scanSession.direction = direction;
+    const batchIds = batch.map(m => m.id);
+    let added = 0;
+    for (const m of batch) {
+      if (!scanSession.map.has(m.id)) {
+        scanSession.captureSeq += 1;
+        scanSession.map.set(m.id, { ...m, captureSeq: scanSession.captureSeq });
+        added++;
+      }
+    }
+    if (batchIds.length === 0) return added;
+    if (scanSession.order.length === 0) {
+      scanSession.order = [...batchIds];
+      return added;
+    }
+    const hasAnchor = batchIds.some(id => scanSession.order.includes(id));
+    if (!hasAnchor) {
+      if (direction === "up") scanSession.order = [...batchIds, ...scanSession.order];
+      else scanSession.order = [...scanSession.order, ...batchIds];
+      scanSession.order = [...new Set(scanSession.order)];
+      return added;
+    }
+    let order = scanSession.order.slice();
+    let prevKnown = null;
+    for (let i = 0; i < batchIds.length; i++) {
+      const id = batchIds[i];
+      if (order.includes(id)) {
+        prevKnown = id;
+        continue;
+      }
+      if (prevKnown && order.includes(prevKnown)) {
+        order = insertAfter(order, id, prevKnown);
+        prevKnown = id;
+        continue;
+      }
+      const nextKnown = batchIds.slice(i + 1).find(x => order.includes(x));
+      if (nextKnown) order = insertBefore(order, id, nextKnown);
+      else if (direction === "up") order.unshift(id);
+      else order.push(id);
+      prevKnown = id;
+    }
+    scanSession.order = [...new Set(order)];
+    return added;
+  }
+  function scanSessionMessages(scanSession) {
+    const seen = new Set();
+    const out = [];
+    for (const id of scanSession.order) {
+      if (scanSession.map.has(id) && !seen.has(id)) {
+        out.push(scanSession.map.get(id));
+        seen.add(id);
+      }
+    }
+    for (const m of [...scanSession.map.values()].sort((a, b) => (a.captureSeq || 0) - (b.captureSeq || 0))) {
+      if (!seen.has(m.id)) {
+        out.push(m);
+        seen.add(m.id);
+      }
+    }
+    return out;
+  }
+  function findTailAnchorMatchInScanSession(scanSession, previousState) {
+    return findTailAnchorMatch(scanSessionMessages(scanSession), previousState);
+  }
   async function grabVisible(reason = "manual") {
     if (grabLock) return 0;
     if (reason !== "export") startTotalTimer(false);
@@ -465,6 +541,8 @@
     state.autoStep = 0;
     state.lastTopDistance = null;
     state.lastScrollDirection = "unknown";
+    state.previousFullJson = null;
+    state.previousFullJsonName = "";
     suppressScrollGrabUntilMs = nowMs() + 3000;
     await deleteRecord().catch(console.error);
     state.status = "已清空插件捕获缓存；3秒内不会自动重抓";
@@ -483,7 +561,7 @@
     return String(iso || new Date().toISOString()).replace(/[:.]/g, "-");
   }
   function baseExportName(exportedAt) {
-    return `catchat-${isoDate(exportedAt)}-v041-${state.id}-${isoForFilename(exportedAt)}`;
+    return `catchat-${isoDate(exportedAt)}-v042-${state.id}-${isoForFilename(exportedAt)}`;
   }
   function normalizeForAnchor(text) {
     return safeText(text).replace(/\s+/g, " ");
@@ -633,10 +711,11 @@
       messageTimestampsAvailable: false,
       messageCaptureTimestampsAvailable: true,
       ...extra,
-      messages: messages.map((m, i) => ({ index: i + 1, ...m }))
+      messages: messages.map((m, i) => ({ ...m, index: i + 1 }))
     };
   }
   function buildFullMarkdown(messages, exportedAt, rescueStateFilename, extra = {}) {
+    const rawCapturedCount = extra.raw_captured_count ?? extra.rawCapturedCount ?? state.map.size;
     let md = "---\n";
     md += `title: ${yamlString(state.title)}\n`;
     md += `date: ${yamlString(isoDate(exportedAt))}\n`;
@@ -645,7 +724,7 @@
     md += `conversation_id: ${yamlString(state.id)}\n`;
     md += `url: ${yamlString(state.url)}\n`;
     md += `message_count: ${messages.length}\n`;
-    md += `raw_captured_count: ${state.map.size}\n`;
+    md += `raw_captured_count: ${rawCapturedCount}\n`;
     md += `export_order: ${yamlString(exportOrderLabel())}\n`;
     md += `total_elapsed: ${yamlString(fmtDuration(totalElapsedMs()))}\n`;
     md += `speed: ${yamlString(speedConfig().label)}\n`;
@@ -663,7 +742,7 @@
     md += `- exported_at: ${exportedAt}\n`;
     md += `- url: ${state.url}\n`;
     md += `- message_count: ${messages.length}\n`;
-    md += `- raw_captured_count: ${state.map.size}\n`;
+    md += `- raw_captured_count: ${rawCapturedCount}\n`;
     md += `- export_order: ${exportOrderLabel()}\n`;
     md += `- total_elapsed: ${fmtDuration(totalElapsedMs())}\n`;
     md += `- speed: ${speedConfig().label}\n`;
@@ -750,7 +829,25 @@
       updatePanel(true);
     }
   }
-  function buildIncrementalMarkdown(newMessages, previousState, match, exportedAt, filenames) {
+  async function loadPreviousFullJsonFile(file) {
+    if (!file) return;
+    try {
+      const text = await readFileText(file);
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed.messages)) throw new Error("Missing messages array");
+      state.previousFullJson = parsed;
+      state.previousFullJsonName = file.name;
+      state.status = `已载入旧 JSON：${file.name}｜旧全文 ${parsed.messages.length} 条｜可生成 combined-full`;
+      updatePanel(true);
+    } catch (e) {
+      console.error("[CatChat Rescuer] previous full JSON load failed", e);
+      state.previousFullJson = null;
+      state.previousFullJsonName = "";
+      state.status = `旧 JSON 载入失败：${e.message || e}`;
+      updatePanel(true);
+    }
+  }
+  function buildIncrementalMarkdown(newMessages, previousState, match, exportedAt, filenames, scanMessageCount) {
     let md = "---\n";
     md += `title: ${yamlString(`${state.title}｜incremental patch`)}\n`;
     md += `date: ${yamlString(isoDate(exportedAt))}\n`;
@@ -772,7 +869,7 @@
     md += `- mode: incremental_patch\n`;
     md += `- previous_state_file: ${state.previousRescueStateName || "loaded rescue-state"}\n`;
     md += `- previous_message_count: ${Number(previousState.message_count || 0)}\n`;
-    md += `- current_message_count: ${orderedMessages().length}\n`;
+    md += `- current_scan_message_count: ${scanMessageCount}\n`;
     md += `- new_message_count: ${newMessages.length}\n`;
     md += `- match_window_size: ${match.window_size}\n`;
     md += `- min_required_window_size: ${MIN_SAFE_ANCHOR_MATCH}\n`;
@@ -791,6 +888,7 @@
     return md;
   }
   async function scanForIncrementalMatch(previous) {
+    const scanSession = createScanSession();
     state.autoScrolling = true;
     state.lastAutoEnded = false;
     state.autoStartedAtMs = nowMs();
@@ -803,21 +901,24 @@
     scrollToBottom();
     await sleep(1200);
     let match = null;
+    let scanResult = null;
     let noMovement = 0;
     for (let i = 0; i <= MAX_INCREMENTAL_SCAN_STEPS && state.autoScrolling; i++) {
       state.autoStep = i;
       const before = posSnapshot();
       const beforeTop = topDistance();
-      const added = await grabVisible("auto");
-      const currentMessages = orderedMessages();
-      match = findTailAnchorMatch(currentMessages, previous);
+      const batch = extractMessagesFromDOM();
+      const added = mergeBatchIntoScanSession(scanSession, batch, "up");
+      const currentScanMessages = scanSessionMessages(scanSession);
+      match = findTailAnchorMatchInScanSession(scanSession, previous);
       if (match && match.window_size >= MIN_SAFE_ANCHOR_MATCH) {
-        state.status = `已找到稳定旧尾巴｜匹配 ${match.window_size} 条｜扫描 ${i} 步｜新增捕获 ${added}｜累计 ${state.map.size}`;
+        state.status = `已找到稳定旧尾巴｜匹配 ${match.window_size} 条｜扫描 ${i} 步｜本轮新增 ${added}｜本轮累计 ${currentScanMessages.length}`;
         updatePanel(true);
+        scanResult = { match, scanMessages: currentScanMessages };
         break;
       }
       const weak = state.lastWeakMatch ? `｜弱匹配 ${state.lastWeakMatch.window_size} 条，继续找` : "";
-      state.status = `增量扫描中：第 ${i + 1} 步｜新增 ${added}｜累计 ${state.map.size}${weak}`;
+      state.status = `增量扫描中：第 ${i + 1} 步｜本轮新增 ${added}｜本轮累计 ${currentScanMessages.length}${weak}`;
       updatePanel();
       scrollUpOneStep();
       await sleep(speedConfig().delay);
@@ -828,14 +929,12 @@
       if (afterTop <= 5 && noMovement >= 3) break;
       if (noMovement >= 12) break;
     }
-    await saveRecord().catch(console.error);
     if (state.autoStartedAtMs) state.lastAutoDurationMs = nowMs() - state.autoStartedAtMs;
     state.autoStartedAtMs = null;
     state.lastAutoEnded = true;
     stopTotalTimer();
     state.autoScrolling = false;
-    if (!match || match.window_size < MIN_SAFE_ANCHOR_MATCH) return null;
-    return match;
+    return scanResult;
   }
   async function exportIncrementalPatch() {
     if (state.autoScrolling) return;
@@ -845,23 +944,29 @@
       updatePanel(true);
       return;
     }
-    const match = await scanForIncrementalMatch(previous);
-    if (!match) {
+    const scanResult = await scanForIncrementalMatch(previous);
+    if (!scanResult) {
       const weak = state.lastWeakMatch ? `\n只找到 ${state.lastWeakMatch.window_size} 条弱匹配；安全阈值是 ${MIN_SAFE_ANCHOR_MATCH} 条。` : "";
       state.status = `增量失败：未找到≥${MIN_SAFE_ANCHOR_MATCH}条连续旧尾巴锚点，未导出文件`;
       updatePanel(true);
       alert(`增量失败：没有找到稳定旧尾巴锚点。${weak}\n没有导出任何文件。\n可以切到慢速/普通，或手动滚到接近旧尾巴附近后再试。`);
       return;
     }
-    const currentMessages = orderedMessages();
+    const { match, scanMessages } = scanResult;
     const exportedAt = new Date().toISOString();
     const baseName = `${baseExportName(exportedAt)}-incremental`;
     const patchJsonFilename = `${baseName}.patch.json`;
     const patchMdFilename = `${baseName}.patch.md`;
-    const combinedJsonFilename = `${baseName}.combined-full.json`;
-    const combinedMdFilename = `${baseName}.combined-full.md`;
-    const stateFilename = `${baseName}.rescue-state.json`;
-    const newMessages = currentMessages.slice(match.match_end_index + 1);
+    const loadedOldMessages = Array.isArray(state.previousFullJson?.messages) ? state.previousFullJson.messages : null;
+    const expectedOldCount = Number(previous.message_count || 0);
+    const previousJsonCountMatches = !!loadedOldMessages && (!expectedOldCount || loadedOldMessages.length === expectedOldCount);
+    const hasPreviousFullJson = !!loadedOldMessages && previousJsonCountMatches;
+    const combinedJsonFilename = hasPreviousFullJson ? `${baseName}.combined-full.json` : "";
+    const combinedMdFilename = hasPreviousFullJson ? `${baseName}.combined-full.md` : "";
+    const stateFilename = hasPreviousFullJson ? `${baseName}.rescue-state.json` : `${baseName}.patch-only.rescue-state.json`;
+    const newMessages = scanMessages.slice(match.match_end_index + 1);
+    const oldMessages = hasPreviousFullJson ? loadedOldMessages : [];
+    const combinedMessages = hasPreviousFullJson ? [...oldMessages, ...newMessages] : [];
     const incrementalMessages = newMessages.map((m, i) => ({
       incrementalIndex: i + 1,
       absoluteIndex: Number(previous.message_count || match.match_end_ordinal || 0) + i + 1,
@@ -877,61 +982,91 @@
       title: state.title,
       url: state.url,
       previousStateFile: state.previousRescueStateName || "loaded rescue-state",
+      previousFullJsonFile: state.previousFullJsonName || null,
       previousMessageCount: previous.message_count || null,
-      currentMessageCount: currentMessages.length,
+      currentScanMessageCount: scanMessages.length,
       newMessageCount: newMessages.length,
       minSafeAnchorMatch: MIN_SAFE_ANCHOR_MATCH,
       match,
       messageTimestampsAvailable: false,
       messageCaptureTimestampsAvailable: true,
       updatedRescueStateFile: stateFilename,
-      combinedFullJsonFile: combinedJsonFilename,
-      combinedFullMarkdownFile: combinedMdFilename,
+      combinedFullJsonFile: combinedJsonFilename || null,
+      combinedFullMarkdownFile: combinedMdFilename || null,
+      combinedFullGenerated: hasPreviousFullJson,
+      note: hasPreviousFullJson ? "combined-full was generated from loaded previous full JSON plus this patch." : (loadedOldMessages ? "旧 JSON 消息数与旧 State 不一致，因此未生成真正 combined-full；state 只是 patch-only / scan-session state。" : "未载入旧 JSON，因此未生成真正 combined-full；state 只是 patch-only / scan-session state。"),
       messages: incrementalMessages
     };
-    const combinedJsonData = buildFullJsonData(currentMessages, exportedAt, {
-      mode: "combined_full_after_strict_incremental_scan",
-      previousStateFile: state.previousRescueStateName || "loaded rescue-state",
-      previousMessageCount: previous.message_count || null,
-      incrementalNewMessageCount: newMessages.length,
-      minSafeAnchorMatch: MIN_SAFE_ANCHOR_MATCH,
-      incrementalMatch: match,
-      rescueStateFile: stateFilename,
-      incrementalPatchJsonFile: patchJsonFilename,
-      incrementalPatchMarkdownFile: patchMdFilename
-    });
-    const patchMd = buildIncrementalMarkdown(newMessages, previous, match, exportedAt, { json: patchJsonFilename, markdown: patchMdFilename, state: stateFilename });
-    const combinedMd = buildFullMarkdown(currentMessages, exportedAt, stateFilename, {
-      mode: "combined_full_after_strict_incremental_scan",
-      previous_state_file: state.previousRescueStateName || "loaded rescue-state",
-      previous_message_count: String(previous.message_count || ""),
-      incremental_new_message_count: String(newMessages.length),
-      min_safe_anchor_match: String(MIN_SAFE_ANCHOR_MATCH),
-      incremental_patch_json_file: patchJsonFilename,
-      incremental_patch_markdown_file: patchMdFilename
-    });
-    state.status = `已匹配稳定尾巴｜旧 ${previous.message_count ?? "?"}｜新增 ${newMessages.length}｜合并 ${currentMessages.length}｜正在导出…`;
+    const patchMd = buildIncrementalMarkdown(newMessages, previous, match, exportedAt, { json: patchJsonFilename, markdown: patchMdFilename, state: stateFilename }, scanMessages.length);
+    state.status = hasPreviousFullJson
+      ? `已匹配稳定尾巴｜旧 ${oldMessages.length}｜新增 ${newMessages.length}｜合并 ${combinedMessages.length}｜正在导出…`
+      : `已匹配稳定尾巴｜新增 ${newMessages.length}｜${loadedOldMessages ? "旧 JSON 与 State 数量不一致" : "未载入旧 JSON"}，因此未生成真正 combined-full｜正在导出 patch…`;
     updatePanel(true);
     await downloadQueued(patchJsonFilename, JSON.stringify(patchJsonData, null, 2), "application/json;charset=utf-8");
     await downloadQueued(patchMdFilename, patchMd, "text/markdown;charset=utf-8");
-    await downloadQueued(combinedJsonFilename, JSON.stringify(combinedJsonData, null, 2), "application/json;charset=utf-8");
-    await downloadQueued(combinedMdFilename, combinedMd, "text/markdown;charset=utf-8");
-    await downloadRescueState(currentMessages, exportedAt, baseName, {
-      incremental_patch_json: patchJsonFilename,
-      incremental_patch_markdown: patchMdFilename,
-      combined_full_json: combinedJsonFilename,
-      combined_full_markdown: combinedMdFilename,
-      rescue_state: stateFilename
-    }, {
-      mode: "combined_full_after_strict_incremental_scan",
-      previous_state_file: state.previousRescueStateName || "loaded rescue-state",
-      previous_message_count: previous.message_count || null,
-      incremental_new_message_count: newMessages.length,
-      combined_message_count: currentMessages.length,
-      min_safe_anchor_match: MIN_SAFE_ANCHOR_MATCH,
-      incremental_match: match
-    });
-    state.status = `增量完成｜旧 ${previous.message_count ?? "?"}｜新增 ${newMessages.length}｜合并 ${currentMessages.length}｜稳定匹配 ${match.window_size}`;
+    if (hasPreviousFullJson) {
+      const combinedJsonData = buildFullJsonData(combinedMessages, exportedAt, {
+        mode: "combined_full_after_session_incremental_scan",
+        previousStateFile: state.previousRescueStateName || "loaded rescue-state",
+        previousFullJsonFile: state.previousFullJsonName || "loaded previous full JSON",
+        previousMessageCount: previous.message_count || oldMessages.length,
+        incrementalNewMessageCount: newMessages.length,
+        minSafeAnchorMatch: MIN_SAFE_ANCHOR_MATCH,
+        incrementalMatch: match,
+        rescueStateFile: stateFilename,
+        incrementalPatchJsonFile: patchJsonFilename,
+        incrementalPatchMarkdownFile: patchMdFilename,
+        rawCapturedCount: combinedMessages.length
+      });
+      const combinedMd = buildFullMarkdown(combinedMessages, exportedAt, stateFilename, {
+        mode: "combined_full_after_session_incremental_scan",
+        previous_state_file: state.previousRescueStateName || "loaded rescue-state",
+        previous_full_json_file: state.previousFullJsonName || "loaded previous full JSON",
+        previous_message_count: String(previous.message_count || oldMessages.length),
+        incremental_new_message_count: String(newMessages.length),
+        rawCapturedCount: combinedMessages.length,
+        min_safe_anchor_match: String(MIN_SAFE_ANCHOR_MATCH),
+        incremental_patch_json_file: patchJsonFilename,
+        incremental_patch_markdown_file: patchMdFilename
+      });
+      await downloadQueued(combinedJsonFilename, JSON.stringify(combinedJsonData, null, 2), "application/json;charset=utf-8");
+      await downloadQueued(combinedMdFilename, combinedMd, "text/markdown;charset=utf-8");
+      await downloadRescueState(combinedMessages, exportedAt, baseName, {
+        incremental_patch_json: patchJsonFilename,
+        incremental_patch_markdown: patchMdFilename,
+        combined_full_json: combinedJsonFilename,
+        combined_full_markdown: combinedMdFilename,
+        rescue_state: stateFilename
+      }, {
+        mode: "combined_full_after_session_incremental_scan",
+        previous_state_file: state.previousRescueStateName || "loaded rescue-state",
+        previous_full_json_file: state.previousFullJsonName || "loaded previous full JSON",
+        previous_message_count: previous.message_count || oldMessages.length,
+        incremental_new_message_count: newMessages.length,
+        combined_message_count: combinedMessages.length,
+        raw_captured_count: combinedMessages.length,
+        min_safe_anchor_match: MIN_SAFE_ANCHOR_MATCH,
+        incremental_match: match
+      });
+      state.status = `增量完成｜旧 ${oldMessages.length}｜新增 ${newMessages.length}｜合并 ${combinedMessages.length}｜稳定匹配 ${match.window_size}`;
+    } else {
+      await downloadRescueState(scanMessages, exportedAt, `${baseName}.patch-only`, {
+        incremental_patch_json: patchJsonFilename,
+        incremental_patch_markdown: patchMdFilename,
+        patch_only_rescue_state: stateFilename
+      }, {
+        mode: "patch_only_after_session_incremental_scan",
+        previous_state_file: state.previousRescueStateName || "loaded rescue-state",
+        previous_message_count: previous.message_count || null,
+        incremental_new_message_count: newMessages.length,
+        current_scan_message_count: scanMessages.length,
+        raw_captured_count: scanMessages.length,
+        min_safe_anchor_match: MIN_SAFE_ANCHOR_MATCH,
+        incremental_match: match,
+        warning: loadedOldMessages ? "旧 JSON 消息数与旧 State 不一致，因此未生成真正 combined-full；此 state 只描述本轮扫描结果，不代表旧完整归档。" : "未载入旧 JSON，因此未生成真正 combined-full；此 state 只描述本轮扫描结果，不代表旧完整归档。"
+      });
+      state.status = `增量完成｜新增 ${newMessages.length}｜${loadedOldMessages ? "旧 JSON 与 State 数量不一致" : "未载入旧 JSON"}，因此未生成真正 combined-full｜稳定匹配 ${match.window_size}`;
+    }
     updatePanel(true);
   }
   function makePanel() {
@@ -941,7 +1076,7 @@
     panel.id = PANEL_ID;
     panel.innerHTML = `
       <div class="ccr-title">
-        <span>猫茶抢救器 v0.4.1</span>
+        <span>猫茶抢救器 v0.4.2</span>
         <button id="ccr-hide" title="Hide">×</button>
       </div>
       <div class="ccr-count">已捕获：<span id="ccr-count">0</span></div>
@@ -961,15 +1096,18 @@
         <button id="ccr-md">导出 MD</button>
         <button id="ccr-state">导出 State</button>
         <button id="ccr-load-state">载入 State</button>
+        <button id="ccr-load-json">载入旧 JSON</button>
         <button id="ccr-incremental">增量扫描</button>
         <button id="ccr-reset">重置计时</button>
         <button id="ccr-clear">清空插件缓存</button>
         <input id="ccr-state-file" type="file" accept="application/json,.json" style="display:none" />
+        <input id="ccr-json-file" type="file" accept="application/json,.json" style="display:none" />
       </div>
-      <div class="ccr-status" id="ccr-status">v0.4.1：严格锚点扫描，未稳定匹配不导出。</div>
+      <div class="ccr-status" id="ccr-status">v0.4.2：增量扫描只用本轮扫描缓存；合并完整归档需载入旧 JSON</div>
     `;
     document.body.appendChild(panel);
     const stateFileInput = panel.querySelector("#ccr-state-file");
+    const jsonFileInput = panel.querySelector("#ccr-json-file");
     panel.querySelector("#ccr-hide").onclick = () => { panel.style.display = "none"; };
     panel.querySelector("#ccr-grab").onclick = () => grabVisible("manual");
     panel.querySelector("#ccr-watch").onclick = () => toggleScrollWatch();
@@ -982,10 +1120,12 @@
     panel.querySelector("#ccr-md").onclick = () => exportMarkdown();
     panel.querySelector("#ccr-state").onclick = () => exportStateOnly();
     panel.querySelector("#ccr-load-state").onclick = () => stateFileInput.click();
+    panel.querySelector("#ccr-load-json").onclick = () => jsonFileInput.click();
     panel.querySelector("#ccr-incremental").onclick = () => exportIncrementalPatch();
     panel.querySelector("#ccr-reset").onclick = () => resetTimer();
     panel.querySelector("#ccr-clear").onclick = () => clearCurrent();
     stateFileInput.onchange = () => loadStateFile(stateFileInput.files?.[0]);
+    jsonFileInput.onchange = () => loadPreviousFullJsonFile(jsonFileInput.files?.[0]);
   }
   function setText(id, value, force = false) {
     const el = document.getElementById(id);
@@ -1028,11 +1168,11 @@
       state.timerRunStartedAtMs = null;
       state.speedMode = old.speedMode || "normal";
       state.lastAutoEnded = old.lastAutoEnded ?? true;
-      state.status = `已载入本地缓存；增量请先载入 State。稳定匹配需≥${MIN_SAFE_ANCHOR_MATCH}条`;
+      state.status = `已载入本地缓存；增量请先载入 State。合并完整归档需载入旧 JSON。稳定匹配需≥${MIN_SAFE_ANCHOR_MATCH}条`;
     }
     startPanelTimer();
     updatePanel(true);
-    console.log("[CatChat Rescuer v0.4.1] strict anchor scan loaded.");
+    console.log("[CatChat Rescuer v0.4.2] session incremental scan loaded.");
   }
   init();
 })();

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CatChat Rescuer Clean",
-  "version": "0.4.1",
-  "description": "ChatGPT conversation capture with strict state-first incremental anchor scan.",
+  "version": "0.4.2",
+  "description": "ChatGPT conversation capture with session-only incremental anchor scan and optional full JSON merge.",
   "permissions": [
     "storage",
     "scripting",

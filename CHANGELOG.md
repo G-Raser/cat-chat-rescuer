@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.4.2-session-incremental-scan
+
+Fixes the real full-window failure where incremental scan could be misled by the old local captured cache.
+
+### Added
+
+- Adds a per-run scan session for incremental scanning.
+- Adds `载入旧 JSON` so `combined-full` is generated only from the previous full JSON plus the new patch.
+- Exports only patch files and `.patch-only.rescue-state.json` when old full JSON is not loaded.
+- Checks that loaded old JSON message count matches the loaded State before generating `combined-full`.
+
+### Changed
+
+- Incremental anchor matching now uses only messages captured by the current scan session.
+- Incremental patch slicing now uses only the current scan session messages.
+- Full export still uses the normal global capture cache.
+
+### Notes
+
+- `orderedMessages()`, `state.map`, and `state.order` are no longer used to decide whether incremental anchors were found.
+- If fewer than 3 continuous old tail anchors are found, no patch, combined-full, or new state is exported.
+
 ## v0.4.1-strict-anchor-scan
 
 Fixes the unsafe incremental behavior where a weak one-message anchor could be treated as a valid match.
