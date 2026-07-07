@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.4.1-strict-anchor-scan
+
+Fixes the unsafe incremental behavior where a weak one-message anchor could be treated as a valid match.
+
+### Added
+
+- Requires at least 3 continuous tail anchors before incremental export is allowed.
+- Tracks weak 1–2 message matches as weak matches only.
+- Keeps scanning when only weak matches are found.
+- Fails safely without exporting files if a stable anchor match is not found.
+- Adds `min_safe_anchor_match` metadata to rescue-state and incremental outputs.
+
+### Notes
+
+- This is the direct fix for the observed bug: clicking `增量扫描` could export even though the old tail anchor was not stably found.
+- If the status says weak match, it is not enough; the extension should continue scanning or fail without output.
+
 ## v0.4.0-state-first-incremental-scan
 
 Corrects the incremental workflow to load state first, then scan from the current conversation bottom upward until the old tail anchors are found.
@@ -101,4 +118,3 @@ Previously uploaded stable version.
 - Background service worker: `background.js`.
 - Fixed the syntax error from v0.3.4 / v0.3.5 caused by an extra `}` after `startTotalTimer()`.
 - Preserved clean panel title and timer controls.
-
