@@ -47,6 +47,8 @@
     previousRescueStateName: "",
     previousFullJson: null,
     previousFullJsonName: "",
+    countMode: "full",
+    incrementalScanCount: 0,
     lastWeakMatch: null
   };
   let scrollTimer = null;
@@ -415,6 +417,7 @@
   }
   async function grabVisible(reason = "manual") {
     if (grabLock) return 0;
+    state.countMode = "full";
     if (reason !== "export") startTotalTimer(false);
     grabLock = true;
     if (reason !== "scroll") {
@@ -458,6 +461,7 @@
   }
   async function autoScrollUp() {
     if (state.autoScrolling) return;
+    state.countMode = "full";
     startTotalTimer(true);
     state.autoScrolling = true;
     state.lastAutoEnded = false;
@@ -531,6 +535,8 @@
     state.autoScrolling = false;
     state.map.clear();
     state.order = [];
+    state.countMode = "full";
+    state.incrementalScanCount = 0;
     state.captureSeq = 0;
     state.captureStartedAtMs = null;
     state.totalElapsedMs = 0;
@@ -889,6 +895,8 @@
   }
   async function scanForIncrementalMatch(previous) {
     const scanSession = createScanSession();
+    state.countMode = "incremental";
+    state.incrementalScanCount = 0;
     state.autoScrolling = true;
     state.lastAutoEnded = false;
     state.autoStartedAtMs = nowMs();
@@ -910,15 +918,16 @@
       const batch = extractMessagesFromDOM();
       const added = mergeBatchIntoScanSession(scanSession, batch, "up");
       const currentScanMessages = scanSessionMessages(scanSession);
+      state.incrementalScanCount = currentScanMessages.length;
       match = findTailAnchorMatchInScanSession(scanSession, previous);
       if (match && match.window_size >= MIN_SAFE_ANCHOR_MATCH) {
-        state.status = `已找到稳定旧尾巴｜匹配 ${match.window_size} 条｜扫描 ${i} 步｜本轮新增 ${added}｜本轮累计 ${currentScanMessages.length}`;
+        state.status = `已找到稳定旧尾巴｜匹配 ${match.window_size} 条｜扫描 ${i} 步｜完整缓存 ${state.map.size}｜本轮扫描 ${currentScanMessages.length}`;
         updatePanel(true);
         scanResult = { match, scanMessages: currentScanMessages };
         break;
       }
       const weak = state.lastWeakMatch ? `｜弱匹配 ${state.lastWeakMatch.window_size} 条，继续找` : "";
-      state.status = `增量扫描中：第 ${i + 1} 步｜本轮新增 ${added}｜本轮累计 ${currentScanMessages.length}${weak}`;
+      state.status = `增量扫描中：第 ${i + 1} 步｜本轮新增 ${added}｜完整缓存 ${state.map.size}｜本轮扫描 ${currentScanMessages.length}${weak}`;
       updatePanel();
       scrollUpOneStep();
       await sleep(speedConfig().delay);
@@ -947,7 +956,7 @@
     const scanResult = await scanForIncrementalMatch(previous);
     if (!scanResult) {
       const weak = state.lastWeakMatch ? `\n只找到 ${state.lastWeakMatch.window_size} 条弱匹配；安全阈值是 ${MIN_SAFE_ANCHOR_MATCH} 条。` : "";
-      state.status = `增量失败：未找到≥${MIN_SAFE_ANCHOR_MATCH}条连续旧尾巴锚点，未导出文件`;
+      state.status = `增量失败：未找到≥${MIN_SAFE_ANCHOR_MATCH}条连续旧尾巴锚点，未导出文件｜完整缓存 ${state.map.size}｜本轮扫描 ${state.incrementalScanCount}`;
       updatePanel(true);
       alert(`增量失败：没有找到稳定旧尾巴锚点。${weak}\n没有导出任何文件。\n可以切到慢速/普通，或手动滚到接近旧尾巴附近后再试。`);
       return;
@@ -999,8 +1008,8 @@
     };
     const patchMd = buildIncrementalMarkdown(newMessages, previous, match, exportedAt, { json: patchJsonFilename, markdown: patchMdFilename, state: stateFilename }, scanMessages.length);
     state.status = hasPreviousFullJson
-      ? `已匹配稳定尾巴｜旧 ${oldMessages.length}｜新增 ${newMessages.length}｜合并 ${combinedMessages.length}｜正在导出…`
-      : `已匹配稳定尾巴｜新增 ${newMessages.length}｜${loadedOldMessages ? "旧 JSON 与 State 数量不一致" : "未载入旧 JSON"}，因此未生成真正 combined-full｜正在导出 patch…`;
+      ? `已匹配稳定尾巴｜旧 ${oldMessages.length}｜新增 ${newMessages.length}｜合并 ${combinedMessages.length}｜完整缓存 ${state.map.size}｜本轮扫描 ${scanMessages.length}｜正在导出…`
+      : `已匹配稳定尾巴｜新增 ${newMessages.length}｜${loadedOldMessages ? "旧 JSON 与 State 数量不一致" : "未载入旧 JSON"}，因此未生成真正 combined-full｜完整缓存 ${state.map.size}｜本轮扫描 ${scanMessages.length}｜正在导出 patch…`;
     updatePanel(true);
     await downloadQueued(patchJsonFilename, JSON.stringify(patchJsonData, null, 2), "application/json;charset=utf-8");
     await downloadQueued(patchMdFilename, patchMd, "text/markdown;charset=utf-8");
@@ -1048,7 +1057,7 @@
         min_safe_anchor_match: MIN_SAFE_ANCHOR_MATCH,
         incremental_match: match
       });
-      state.status = `增量完成｜旧 ${oldMessages.length}｜新增 ${newMessages.length}｜合并 ${combinedMessages.length}｜稳定匹配 ${match.window_size}`;
+      state.status = `增量完成｜旧 ${oldMessages.length}｜新增 ${newMessages.length}｜合并 ${combinedMessages.length}｜稳定匹配 ${match.window_size}｜完整缓存 ${state.map.size}｜本轮扫描 ${scanMessages.length}`;
     } else {
       await downloadRescueState(scanMessages, exportedAt, `${baseName}.patch-only`, {
         incremental_patch_json: patchJsonFilename,
@@ -1065,7 +1074,7 @@
         incremental_match: match,
         warning: loadedOldMessages ? "旧 JSON 消息数与旧 State 不一致，因此未生成真正 combined-full；此 state 只描述本轮扫描结果，不代表旧完整归档。" : "未载入旧 JSON，因此未生成真正 combined-full；此 state 只描述本轮扫描结果，不代表旧完整归档。"
       });
-      state.status = `增量完成｜新增 ${newMessages.length}｜${loadedOldMessages ? "旧 JSON 与 State 数量不一致" : "未载入旧 JSON"}，因此未生成真正 combined-full｜稳定匹配 ${match.window_size}`;
+      state.status = `增量完成｜新增 ${newMessages.length}｜${loadedOldMessages ? "旧 JSON 与 State 数量不一致" : "未载入旧 JSON"}，因此未生成真正 combined-full｜稳定匹配 ${match.window_size}｜完整缓存 ${state.map.size}｜本轮扫描 ${scanMessages.length}`;
     }
     updatePanel(true);
   }
@@ -1079,7 +1088,7 @@
         <span>猫茶抢救器 v0.4.2</span>
         <button id="ccr-hide" title="Hide">×</button>
       </div>
-      <div class="ccr-count">已捕获：<span id="ccr-count">0</span></div>
+      <div class="ccr-count"><span id="ccr-count-label">完整缓存</span>：<span id="ccr-count">0</span></div>
       <div class="ccr-timers">
         <div>总用时：<span id="ccr-total">00:00</span></div>
         <div>本轮上滚：<span id="ccr-auto-time">00:00</span>｜步数：<span id="ccr-step">0</span></div>
@@ -1136,7 +1145,9 @@
     }
   }
   function updatePanel(force = false) {
-    setText("ccr-count", String(state.map.size), force);
+    const showingIncremental = state.countMode === "incremental";
+    setText("ccr-count-label", showingIncremental ? "本轮扫描" : "完整缓存", force);
+    setText("ccr-count", String(showingIncremental ? state.incrementalScanCount : state.map.size), force);
     setText("ccr-status", state.status, force);
     const total = fmtDuration(totalElapsedMs());
     const autoRunning = state.autoStartedAtMs ? nowMs() - state.autoStartedAtMs : state.lastAutoDurationMs;
