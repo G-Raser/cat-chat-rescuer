@@ -1,12 +1,20 @@
-# private exports / real conversation archives
+# CatChat Rescuer exports and private conversation archives
 exports/
 output/
 out/
 archives/
 archive/
+catchat-*.md
+catchat-*.json
+*.patch.md
+*.patch.json
+*.combined-full.md
+*.combined-full.json
+*.rescue-state.json
+*.rescue-state.local.json
+*.patch-only.rescue-state.json
 *.md.tmp
 *.json.tmp
-*.rescue-state.local.json
 
 # ChatGPT official data exports
 chatgpt-data*/
