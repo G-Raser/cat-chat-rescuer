@@ -4,7 +4,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   try {
     await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["style.css"] });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
-  } catch (e) {
-    console.error("[CatChat Rescuer v0.3.0] inject failed", e);
+  } catch (error) {
+    console.error("[CatChat Rescuer] inject failed", error);
   }
 });
