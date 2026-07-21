@@ -1,10 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "CatChat Rescuer Clean",
+  "name": "CatChat Rescuer",
   "version": "0.4.2",
-  "description": "ChatGPT conversation capture with session-only incremental anchor scan and optional full JSON merge.",
+  "description": "Locally capture and incrementally archive long ChatGPT conversations as Markdown and JSON.",
   "permissions": [
-    "storage",
     "scripting",
     "activeTab"
   ],
@@ -13,7 +12,7 @@
     "https://chat.openai.com/*"
   ],
   "action": {
-    "default_title": "Summon CatChat Rescuer"
+    "default_title": "Open CatChat Rescuer"
   },
   "background": {
     "service_worker": "background.js"
