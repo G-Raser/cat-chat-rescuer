@@ -1,125 +1,171 @@
-# CatChat Rescuer Clean v0.4.2
+# CatChat Rescuer v0.4.2
 
-CatChat Rescuer 是用于抢救超长 ChatGPT 对话的本地 Edge/Chrome 扩展。
+CatChat Rescuer 是一个用于本地抢救和增量归档超长 ChatGPT 对话的 Edge / Chrome 扩展。
 
-当前版本把增量流程改成真正的 **state-first incremental scan**：先载入上一次完整导出的 `.rescue-state.json`，再由插件从当前窗口底部开始建立本轮扫描缓存，自动向上扫描，直到本轮实际抓到至少 3 条连续旧 tail anchors。
+它会从当前 ChatGPT 页面读取已经加载到 DOM 中的文字消息，保存在浏览器本地缓存中，并导出为 Markdown、JSON 和用于下一轮增量定位的 `.rescue-state.json`。
+
+> 非官方工具，与 OpenAI 无关联。ChatGPT 页面结构变化可能导致扩展暂时失效。
+
+## 适合什么场景
+
+- 超长对话需要完整导出。
+- 同一个对话后续又新增了很多消息，只想补抓新增尾巴。
+- 希望保留 Markdown 便于阅读，同时保留 JSON 便于后续处理。
+- 不希望为了增量导出把旧归档交给第三方服务器。
+
+## 隐私说明
+
+当前版本不需要 OpenAI Token，也不会主动把聊天内容发送到第三方服务器。
+
+数据主要经过两条本地路径：
+
+- 捕获缓存保存在浏览器 IndexedDB 中。
+- 导出文件由浏览器直接下载到本机。
+
+但请注意：
+
+- 导出的 Markdown / JSON 包含真实聊天内容。
+- `.rescue-state.json` 也不是匿名元数据；它包含对话标题、URL、conversation ID、尾部锚点和少量尾部文字预览。
+- 请把 State 文件当作私密聊天归档保管，不要随意上传、提交到 GitHub 或转发。
+- 清除浏览器站点数据、浏览器配置或扩展本地数据，可能导致未导出的本地缓存丢失。
+
+更多说明见 [`PRIVACY.md`](PRIVACY.md)。
 
 ## 当前能力
 
-- 保留完整导出 MD / JSON。
-- 导出文件名包含日期。
-- Markdown 增加 YAML front matter。
-- Markdown 明确写入 `date`、`exported_at`、`timezone`。
-- 如果没有可靠的原始单条消息时间戳，会标记 `message_timestamps_available: false`，不编造时间。
-- 导出 MD / JSON 时会同时下载 `.rescue-state.json`。
-- 单独按钮：`导出 State`。
-- 增量按钮：`载入 State`。
-- 增量按钮：`载入旧 JSON`。
-- 增量按钮：`增量扫描`。
-- 增量扫描只用本轮扫描缓存匹配旧 state 的 tail anchors，不再用旧本地缓存判断锚点。
-- v0.4.2 要求至少连续匹配 3 条旧尾巴锚点；只匹配 1–2 条会继续扫描，不会导出。
-- 载入旧 JSON 后，增量匹配成功会导出 incremental patch、combined full archive 和新的 rescue-state。
-- 未载入旧 JSON 时，只导出 patch 和 patch-only rescue-state，不假装生成完整合并归档。
+- 完整导出 Markdown / JSON。
+- 导出文件名包含日期和导出时间。
+- Markdown 带 YAML front matter。
+- 不伪造单条消息原始时间；无法可靠读取时会标记 `message_timestamps_available: false`。
+- 完整导出时同时生成 `.rescue-state.json`。
+- 支持真正的 state-first 增量扫描。
+- 增量扫描只使用本轮扫描缓存寻找旧尾巴，不使用旧全局缓存冒充匹配结果。
+- 至少连续匹配 3 条旧尾巴锚点才允许导出。
+- 载入同一轮旧 JSON 后，可生成新的 `combined-full` 完整归档。
+- 没有旧 JSON 时，只生成 patch 和 patch-only state，不假装已经得到完整归档。
+- 找不到稳定锚点时安全失败，不导出错误拼接文件。
 
-## 重要说明
+## 安装
 
-v0.4.2 的正确顺序是：
+### Edge
 
-1. 先点 `载入 State`，选择上一次完整导出的 `.rescue-state.json`。
-2. 如果要生成真正完整合并归档，再点 `载入旧 JSON`，选择同一轮上一次完整导出的 `.json`。
-3. 再点 `增量扫描`。
-4. 插件会自动跳到底部，从底部向上抓取本轮扫描消息。
-5. 找到至少 3 条连续旧尾巴锚点后停止扫描。
-6. 有旧 JSON 时导出 patch、combined-full 和新的 rescue-state；没有旧 JSON 时只导出 patch 和 patch-only rescue-state。
+1. 打开 `edge://extensions/`。
+2. 开启“开发人员模式”。
+3. 点击“加载解压缩的扩展”。
+4. 选择本仓库文件夹。
+5. 打开或刷新 ChatGPT 对话页。
 
-这版不要求你只点 `抓当前屏`，因为新增消息可能有很多屏。
+### Chrome
 
-## 为什么要 3 条锚点
+1. 打开 `chrome://extensions/`。
+2. 开启“开发者模式”。
+3. 点击“加载已解压的扩展程序”。
+4. 选择本仓库文件夹。
+5. 打开或刷新 ChatGPT 对话页。
 
-旧版本可能因为只撞上一条重复短消息，就误以为已经找到旧尾巴，导致“没找到稳定锚点也导出”。v0.4.2 仍然要求至少 3 条连续锚点，弱匹配会显示在状态栏里，但不会触发导出。
+面板标题应显示 `猫茶抢救器 v0.4.2`。
 
-## 增量测试流程
+升级旧版本时，建议先关闭旧扩展和所有 ChatGPT 标签页，再重新加载扩展并打开对话。
 
-推荐先用中等窗口测试。
+## 最快上手
 
-1. 用 v0.4.2 打开同一个中等窗口。
-2. 确认之前已经做过一次完整导出，并保存了 `.rescue-state.json`。
-3. 继续在这个窗口新增多条消息。
-4. 点 `载入 State`，选择上一次完整导出的 `.rescue-state.json`。
-5. 如需 combined-full，点 `载入旧 JSON`，选择上一次完整导出的 `.json`。
-6. 点 `增量扫描`。
-7. 等插件从底部自动向上找旧尾巴锚点。
+### 第一次完整导出
 
-匹配成功后会下载：
+1. 打开一个具体 ChatGPT 对话。
+2. 点击 `温和上滚`，等待扩展把需要的历史消息抓进完整缓存。
+3. 点击 `导出 JSON`，保存 JSON 和同批生成的 State。
+4. 需要易读文本时，再点击 `导出 MD`。
 
-```text
-catchat-YYYY-MM-DD-v042-<conversation_id>-<timestamp>-incremental.patch.json
-catchat-YYYY-MM-DD-v042-<conversation_id>-<timestamp>-incremental.patch.md
-catchat-YYYY-MM-DD-v042-<conversation_id>-<timestamp>-incremental.combined-full.json
-catchat-YYYY-MM-DD-v042-<conversation_id>-<timestamp>-incremental.combined-full.md
-catchat-YYYY-MM-DD-v042-<conversation_id>-<timestamp>-incremental.rescue-state.json
-```
-
-如果没有载入旧 JSON，则不会生成 `combined-full`，只会额外下载：
+下一轮增量最好保存这一对文件：
 
 ```text
-catchat-YYYY-MM-DD-v042-<conversation_id>-<timestamp>-incremental.patch-only.rescue-state.json
+上一次完整导出的 .json
+同一轮完整导出的 .rescue-state.json
 ```
 
-## 结果怎么用
+### 后续增量导出
 
-- `.patch.md` / `.patch.json`：只看新增尾巴，适合快速检查增量是否切对。
-- `.combined-full.md` / `.combined-full.json`：可以作为新的完整归档版本保存。
-- `.rescue-state.json`：下一轮增量继续用的新 state。
+1. 点击 `载入 State`，选择上一次完整导出的 `.rescue-state.json`。
+2. 点击 `载入旧 JSON`，选择与该 State 同一轮导出的完整 `.json`。
+3. 点击 `增量扫描`。
+4. 扩展会自动跳到底部，从底部向上建立本轮扫描缓存。
+5. 找到至少 3 条连续旧尾巴锚点后停止并导出。
+
+成功后通常会得到：
+
+```text
+*.incremental.patch.json
+*.incremental.patch.md
+*.incremental.combined-full.json
+*.incremental.combined-full.md
+*.incremental.rescue-state.json
+```
+
+下一轮继续使用最新的：
+
+```text
+combined-full.json
+rescue-state.json
+```
+
+## 各文件用途
+
+- `.patch.md` / `.patch.json`：只包含本轮新增尾巴，适合快速检查切分是否正确。
+- `.combined-full.md` / `.combined-full.json`：旧完整 JSON 加本轮新增消息，可作为新的完整归档。
+- `.rescue-state.json`：下一轮增量定位所需的尾部坐标文件。
 - `.patch-only.rescue-state.json`：只描述本轮扫描结果，不代表旧完整归档。
+
+State 不是旧全文，不能单独恢复完整历史。
 
 ## 增量失败时
 
-如果找不到至少 3 条连续旧尾巴锚点，会显示失败并停止，不会硬拼接，也不会修改旧归档。
+找不到至少 3 条连续旧尾巴锚点时，扩展会停止且不导出文件。
 
 常见原因：
 
-- 载入了别的窗口的 `.rescue-state.json`。
-- 当前窗口没有加载到旧 tail anchors 附近。
-- ChatGPT 当前可见尾巴和旧导出尾巴不一致。
-- 新增消息太多，扫描步数仍不够。
+- 载入了另一个对话的 State。
+- 旧 JSON 和 State 不是同一轮导出。
+- 当前页面还没有加载到旧尾巴附近。
+- ChatGPT 页面中的尾部内容发生了变化。
+- 新增消息太多，默认扫描仍未走到旧锚点。
 
-可以切到 `慢速` 或 `普通` 再试，或者手动滚到接近旧尾巴附近后再点 `增量扫描`。
+可以切到 `慢速` 或 `普通` 后重试，或先手动滚到接近旧尾巴的位置。
 
-## 当前完整导出输出
+## 重要限制
 
-点击 `导出 MD` 时，会下载：
+- 最安全的使用位置是具体的 `/c/<conversation-id>` 对话页。
+- 如果导出文件名中的 ID 显示为 `unknown-...`，不要直接拿它做高价值增量合并；请刷新并确认自己位于具体对话页。
+- 当前主要导出文字消息，不保证完整导出图片、附件、画布或其他富媒体内容。
+- 单条消息的 `capturedAt` 是插件捕获时间，不是消息原始发送时间。
+- 当前 Markdown 角色标题仍使用项目原始的中文显示名“主人 / 猫猫”；这只是显示文本，后续可改成可配置项。
+- 页面 DOM 改版后，选择器和滚动逻辑可能需要更新。
+
+## 输出示例
+
+完整 Markdown 导出：
 
 ```text
 catchat-YYYY-MM-DD-v042-<conversation_id>-<timestamp>.md
 catchat-YYYY-MM-DD-v042-<conversation_id>-<timestamp>.rescue-state.json
 ```
 
-点击 `导出 JSON` 时，会下载：
+完整 JSON 导出：
 
 ```text
 catchat-YYYY-MM-DD-v042-<conversation_id>-<timestamp>.json
 catchat-YYYY-MM-DD-v042-<conversation_id>-<timestamp>.rescue-state.json
 ```
 
-点击 `导出 State` 时，只下载：
+## 开发检查
 
-```text
-catchat-YYYY-MM-DD-v042-<conversation_id>-<timestamp>.rescue-state.json
-```
+仓库带有最小 GitHub Actions 检查：
 
-## 安装建议
+- `node --check content.js`
+- `node --check background.js`
+- 解析并校验 `manifest.json`
 
-1. 打开 `edge://extensions/`。
-2. 删除或关闭旧版 CatChat Rescuer。
-3. 关闭所有 ChatGPT 标签页。
-4. 重新加载本仓库文件夹作为 unpacked extension。
-5. 重新打开 ChatGPT。
-6. 面板标题应显示 `猫茶抢救器 v0.4.2`。
+本地也可以直接运行同样的命令。
 
-## 后续计划
+## License
 
-下一阶段可以再实现：
-
-- 更清楚的补丁预览。
-- 更完整的跨窗口 / 无缓存锚点查找流程。
+MIT License，见 [`LICENSE`](LICENSE)。
