@@ -10,17 +10,26 @@ Fixes the real full-window failure where incremental scan could be misled by the
 - Adds `载入旧 JSON` so `combined-full` is generated only from the previous full JSON plus the new patch.
 - Exports only patch files and `.patch-only.rescue-state.json` when old full JSON is not loaded.
 - Checks that loaded old JSON message count matches the loaded State before generating `combined-full`.
+- Adds public installation, privacy, limitations, and file-usage documentation.
+- Adds `PRIVACY.md` and an MIT `LICENSE`.
+- Adds a minimal GitHub Actions syntax and manifest validation workflow.
 
 ### Changed
 
 - Incremental anchor matching now uses only messages captured by the current scan session.
 - Incremental patch slicing now uses only the current scan session messages.
 - Full export still uses the normal global capture cache.
+- The main counter now shows the most useful value for the active mode: `完整缓存` during full capture and `本轮扫描` during incremental scan.
+- Public extension name changed from `CatChat Rescuer Clean` to `CatChat Rescuer`.
+- Removed the unused `storage` permission from the manifest.
+- Expanded `.gitignore` to block common conversation exports, patches, combined archives, and rescue-state files.
+- Removed the stale hard-coded v0.3.0 label from background injection errors.
 
 ### Notes
 
 - `orderedMessages()`, `state.map`, and `state.order` are no longer used to decide whether incremental anchors were found.
 - If fewer than 3 continuous old tail anchors are found, no patch, combined-full, or new state is exported.
+- `.rescue-state.json` is sensitive and may contain conversation metadata and short tail-message previews.
 
 ## v0.4.1-strict-anchor-scan
 
@@ -118,7 +127,7 @@ Stage 1 of incremental append support.
 ### Notes
 
 - Current DOM capture does not provide reliable original ChatGPT message timestamps.
-- `capturedAt` is plugin capture time, not original message time.
+- `capturedAt` is plugin capture time, not original ChatGPT message time.
 - Markdown therefore sets `message_timestamps_available: false` and does not fabricate per-message dates.
 
 ### Non-goals preserved
