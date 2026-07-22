@@ -166,6 +166,6 @@ catchat-YYYY-MM-DD-v042-<conversation_id>-<timestamp>.rescue-state.json
 
 本地也可以直接运行同样的命令。
 
-## License
+## 授权状态
 
-MIT License，见 [`LICENSE`](LICENSE)。
+当前仓库暂未提供软件许可证。公开可见不等于授予复制、修改、再发布或商业使用的许可；后续授权方式由仓库作者另行决定。
