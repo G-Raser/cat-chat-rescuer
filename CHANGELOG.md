@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.5.2-export-options-and-ui-boot
+
+Improves the modern API-first UI startup and restores optional timestamps in readable exports.
+
+### Added
+
+- Adds `boot-hide.js` before the legacy DOM core so the old panel is hidden until the modern three-section UI is ready.
+- Adds an independent `导出时间戳` checkbox to the readable conversation export.
+- Adds an independent `导出时间戳` checkbox to thinking Markdown / TXT exports.
+- Timestamp preferences are stored in browser localStorage and default to enabled.
+- Readable timestamps use the API-provided `create_time` and are normalized to ISO strings; missing times are not fabricated.
+
+### Changed
+
+- The extension-icon recovery path now also injects `boot-hide.js` before `content.js`, preventing the old UI from flashing during recovery.
+- Modern UI marks the panel ready only after the replacement body and event handlers are mounted.
+- If modern mounting never succeeds, the old panel becomes visible after a 15-second fallback window instead of remaining permanently hidden.
+- README updated for v0.5.2, timestamp toggles, and the new startup sequence.
+
 ## v0.5.1-panel-recovery-hotfix
 
 Hotfix for the v0.5.0 case where the extension remained installed but the entire in-page panel could fail to appear after an extension reload.
