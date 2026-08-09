@@ -1,16 +1,22 @@
 # Privacy
 
-CatChat Rescuer is designed as a local browser extension.
+CatChat Rescuer is designed as a local browser extension for archiving ChatGPT conversations and displayed thinking traces.
 
 ## Data flow
 
-The current version:
+The current experimental API-first version can use two local workflows:
 
-- reads text already rendered in the active ChatGPT page;
-- stores captured messages in the browser's local IndexedDB;
-- exports files through normal browser downloads;
-- does not require an OpenAI API key;
-- does not intentionally send conversation content to a third-party server.
+- **API-first reading:** uses the browser's already authenticated ChatGPT session to request conversation data that the current account can access, then keeps the result in extension/page memory for export.
+- **Legacy DOM rescue:** reads text rendered in the active ChatGPT page and can store captured messages in browser-local IndexedDB for incremental rescue.
+
+The extension:
+
+- does not require the user to paste an OpenAI API key;
+- does not intentionally send conversation content to a third-party server;
+- downloads exports directly through the browser;
+- does not persist ChatGPT access tokens or account headers into exported files.
+
+Runtime authentication information may be read from the current ChatGPT session only for the purpose of making the conversation request.
 
 ## Sensitive files
 
@@ -18,35 +24,28 @@ Treat every exported file as private unless you have reviewed it manually.
 
 This includes:
 
-- Markdown exports;
-- JSON exports;
+- readable Markdown exports;
+- raw conversation JSON;
+- displayed-thinking Markdown / TXT exports;
+- thinking probe JSON;
 - incremental patch files;
 - combined-full archives;
 - `.rescue-state.json` files.
 
-A rescue-state file may contain:
+Raw JSON and diagnostic exports may contain conversation IDs, project metadata, message metadata, branch structure, timestamps, model metadata, request-related fields, or other account/conversation context returned by ChatGPT.
 
-- conversation title;
-- source URL;
-- conversation ID;
-- message counts;
-- tail-anchor hashes;
-- short tail-message previews used for diagnostics.
+A rescue-state file may contain conversation title, source URL, conversation ID, message counts, tail-anchor hashes, and short tail-message previews used for diagnostics. It is therefore not anonymous metadata.
 
-It is therefore not anonymous metadata.
+Do not commit real conversations, raw JSON, thinking probes, conversation IDs, account IDs, tokens, screenshots containing private chat text, or diagnostic dumps to the public repository.
 
 ## Local cache
 
-Captured messages may remain in browser-local storage until you clear the extension cache, clear browser site data, remove the browser profile, or otherwise delete local browser data.
+Legacy DOM captures may remain in browser-local IndexedDB until you clear the extension cache, clear browser site data, remove the browser profile, or otherwise delete local browser data.
 
-Do not rely on the local cache as your only backup. Export important conversations to files.
+API-first conversation data is intended to remain in memory for the current page session and to be written only when the user explicitly exports a file.
 
-## Repository hygiene
+## External service boundary
 
-The repository `.gitignore` excludes common CatChat export names and archive folders, but users should still review `git status` before every public commit.
+CatChat Rescuer communicates with ChatGPT itself because that is the source of the conversation being archived. It does not add a separate archival server or analytics service.
 
-Never commit real conversation exports, state files, screenshots, attachments, or official ChatGPT data-export packages to a public repository.
-
-## Third-party notice
-
-CatChat Rescuer is an independent, unofficial project and is not affiliated with OpenAI.
+ChatGPT's own handling of account/session/conversation data is governed by the service itself and is outside this extension's control.
