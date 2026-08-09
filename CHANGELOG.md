@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.4-ui-typography-polish
+
+Small typography cleanup for the modern thinking panel.
+
+### Changed
+
+- Normalizes `开发诊断 / 完整原始轨迹` to the same secondary-control scale used elsewhere in the modern UI.
+- Sets the diagnostics summary to 11px text, 1.35 line height, and 600 weight so it no longer reads like a surprise section title.
+- Keeps this change isolated in `ui-polish.css`; reading, parsing, and export behavior are unchanged.
+- README updated for v0.5.4.
+
 ## v0.5.3-ui-polish
 
 Small visual consistency pass for the modern API-first panel.
