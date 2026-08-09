@@ -76,22 +76,55 @@
     return { title: conversation.title || document.title || "Untitled ChatGPT Conversation", conversationId: conversation.conversation_id ?? conversation.id ?? null, source: conversation.catchat_api_source ?? { mode: "unknown" }, messages, displayedThinking: items, thinkingTurns: turns, thinkingTurnsOnCurrentPath: currentTurns, contentThinkingTurns: turns.filter((t) => Boolean(t.text)), contentThinkingTurnsOnCurrentPath: currentTurns.filter((t) => Boolean(t.text)) };
   }
   function safeFilename(v) { return String(v || "chat").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/\s+/g, " ").trim().slice(0, 100) || "chat"; }
-  function conversationMarkdown(data, labels) {
-    let md = `---\ntitle: ${JSON.stringify(data.title)}\nconversation_id: ${JSON.stringify(data.conversationId)}\nsource: "chatgpt_conversation_api"\napi_mode: ${JSON.stringify(data.source?.mode || "unknown")}\nuser_label: ${JSON.stringify(labels.user)}\nassistant_label: ${JSON.stringify(labels.assistant)}\nmessage_count: ${data.messages.length}\nthinking_turn_current_path_count: ${data.contentThinkingTurnsOnCurrentPath.length}\nthinking_turn_tree_count: ${data.contentThinkingTurns.length}\n---\n\n# ${data.title}\n\n`;
-    data.messages.forEach((m, i) => { md += `## ${m.role === "user" ? labels.user : labels.assistant}｜${String(i + 1).padStart(4, "0")}\n\n${m.text}\n\n`; });
+  function timestampIso(value) {
+    if (value == null || value === "") return null;
+    const n = Number(value);
+    const ms = Number.isFinite(n) ? (Math.abs(n) < 1e12 ? n * 1000 : n) : Date.parse(value);
+    if (!Number.isFinite(ms)) return null;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  function conversationMarkdown(data, labels, options = {}) {
+    const includeTimestamps = options.includeTimestamps !== false;
+    let md = `---\ntitle: ${JSON.stringify(data.title)}\nconversation_id: ${JSON.stringify(data.conversationId)}\nsource: "chatgpt_conversation_api"\napi_mode: ${JSON.stringify(data.source?.mode || "unknown")}\nuser_label: ${JSON.stringify(labels.user)}\nassistant_label: ${JSON.stringify(labels.assistant)}\nmessage_count: ${data.messages.length}\nthinking_turn_current_path_count: ${data.contentThinkingTurnsOnCurrentPath.length}\nthinking_turn_tree_count: ${data.contentThinkingTurns.length}\ntimestamps_included: ${includeTimestamps}\n---\n\n# ${data.title}\n\n`;
+    data.messages.forEach((m, i) => {
+      md += `## ${m.role === "user" ? labels.user : labels.assistant}｜${String(i + 1).padStart(4, "0")}\n\n`;
+      const ts = includeTimestamps ? timestampIso(m.createTime) : null;
+      if (ts) md += `> time: ${ts}\n\n`;
+      md += `${m.text}\n\n`;
+    });
     return md;
   }
   function scopeTurns(data, scope, full = false) { if (full) return scope === "tree" ? data.thinkingTurns : data.thinkingTurnsOnCurrentPath; return scope === "tree" ? data.contentThinkingTurns : data.contentThinkingTurnsOnCurrentPath; }
-  function thinkingMarkdown(data, scope, full = false) {
-    const turns = scopeTurns(data, scope, full), label = scope === "tree" ? "整棵对话树" : "当前分支";
-    let md = `# ${data.title}｜${full ? "完整" : ""}思考轨迹\n\n> 范围：${label}｜${full ? "原始 " : ""}${turns.length} 回合\n\n`;
-    turns.forEach((t, i) => { const title = t.title || t.summaryOnly?.[0] || t.recapText || `思考回合 ${i + 1}`; md += `## ${String(i + 1).padStart(4, "0")}｜${title}\n\n`; if (t.text) md += `${t.text}\n\n`; if (full) for (const s of t.summaryOnly || []) if (s && s !== title) md += `- 摘要：${s}\n`; if (t.text && t.recapText) md += `- ${t.recapText}\n`; if (t.text && t.model) md += `- model: ${t.model}\n`; md += "\n"; });
+  function thinkingMarkdown(data, scope, full = false, options = {}) {
+    const turns = scopeTurns(data, scope, full), label = scope === "tree" ? "整棵对话树" : "当前分支", includeTimestamps = options.includeTimestamps !== false;
+    let md = `# ${data.title}｜${full ? "完整" : ""}思考轨迹\n\n> 范围：${label}｜${full ? "原始 " : ""}${turns.length} 回合｜时间戳：${includeTimestamps ? "是" : "否"}\n\n`;
+    turns.forEach((t, i) => {
+      const title = t.title || t.summaryOnly?.[0] || t.recapText || `思考回合 ${i + 1}`;
+      md += `## ${String(i + 1).padStart(4, "0")}｜${title}\n\n`;
+      const ts = includeTimestamps ? timestampIso(t.createTime) : null;
+      if (ts) md += `> time: ${ts}\n\n`;
+      if (t.text) md += `${t.text}\n\n`;
+      if (full) for (const s of t.summaryOnly || []) if (s && s !== title) md += `- 摘要：${s}\n`;
+      if (t.text && t.recapText) md += `- ${t.recapText}\n`;
+      if (t.text && t.model) md += `- model: ${t.model}\n`;
+      md += "\n";
+    });
     return md;
   }
-  function thinkingText(data, scope, full = false) {
-    const turns = scopeTurns(data, scope, full), label = scope === "tree" ? "整棵对话树" : "当前分支", lines = [`${data.title}｜${full ? "完整" : ""}思考轨迹`, `范围：${label}`, `${full ? "原始" : "思考"}回合：${turns.length}`, ""];
-    turns.forEach((t, i) => { const title = t.title || t.summaryOnly?.[0] || t.recapText || `思考回合 ${i + 1}`; lines.push(`[${String(i + 1).padStart(4, "0")}] ${title}`); if (t.text) lines.push(t.text); if (full) for (const s of t.summaryOnly || []) if (s && s !== title) lines.push(s); if (full && t.recapText) lines.push(t.recapText); lines.push(""); });
+  function thinkingText(data, scope, full = false, options = {}) {
+    const turns = scopeTurns(data, scope, full), label = scope === "tree" ? "整棵对话树" : "当前分支", includeTimestamps = options.includeTimestamps !== false, lines = [`${data.title}｜${full ? "完整" : ""}思考轨迹`, `范围：${label}`, `${full ? "原始" : "思考"}回合：${turns.length}`, `时间戳：${includeTimestamps ? "是" : "否"}`, ""];
+    turns.forEach((t, i) => {
+      const title = t.title || t.summaryOnly?.[0] || t.recapText || `思考回合 ${i + 1}`;
+      lines.push(`[${String(i + 1).padStart(4, "0")}] ${title}`);
+      const ts = includeTimestamps ? timestampIso(t.createTime) : null;
+      if (ts) lines.push(`time: ${ts}`);
+      if (t.text) lines.push(t.text);
+      if (full) for (const s of t.summaryOnly || []) if (s && s !== title) lines.push(s);
+      if (full && t.recapText) lines.push(t.recapText);
+      lines.push("");
+    });
     return lines.join("\n");
   }
-  globalThis.CCRApiData = { normalize, safeFilename, conversationMarkdown, scopeTurns, thinkingMarkdown, thinkingText };
+  globalThis.CCRApiData = { normalize, safeFilename, timestampIso, conversationMarkdown, scopeTurns, thinkingMarkdown, thinkingText };
 })();
