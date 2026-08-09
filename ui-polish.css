@@ -1,3 +1,12 @@
+#catchat-rescuer-v030-panel .ccr-title > span {
+  font-size: 0 !important;
+}
+#catchat-rescuer-v030-panel .ccr-title > span::before {
+  content: "尾痕 | CatLog" !important;
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+  font-weight: 700 !important;
+}
 #catchat-rescuer-v030-panel .ccr-section-heading > .ccr-badge {
   margin-left: auto !important;
 }
