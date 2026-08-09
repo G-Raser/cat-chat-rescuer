@@ -28,3 +28,9 @@
   flex: 0 0 16px !important;
   margin: 0 !important;
 }
+#catchat-rescuer-v030-panel .ccr-thinking-dev > summary {
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  font-weight: 600 !important;
+  color: rgba(247,243,251,.68) !important;
+}
