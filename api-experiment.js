@@ -1,24 +1,8 @@
 (() => {
   const PANEL_ID = "catchat-rescuer-v030-panel";
-  const REQUEST = "catchat-rescuer:api-request";
-  const RESPONSE = "catchat-rescuer:api-response";
   const DISPLAYED_THINKING_TYPES = new Set(["thoughts", "reasoning_recap"]);
   let cachedConversation = null;
   let cachedNormalized = null;
-  let bridgeReady = false;
-
-  function injectBridge() {
-    if (bridgeReady || document.getElementById("catchat-rescuer-api-bridge")) return;
-    const script = document.createElement("script");
-    script.id = "catchat-rescuer-api-bridge";
-    script.src = chrome.runtime.getURL("page-api.js");
-    script.onload = () => {
-      bridgeReady = true;
-      script.remove();
-    };
-    script.onerror = () => setApiStatus("API bridge 加载失败");
-    (document.head || document.documentElement).appendChild(script);
-  }
 
   function conversationId() {
     const match = location.pathname.match(/\/c\/([^/?#]+)/);
@@ -34,33 +18,21 @@
   }
 
   function requestConversation() {
-    injectBridge();
     const id = conversationId();
     if (!id) return Promise.reject(new Error("当前页面没有识别到 conversation ID"));
-    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        window.removeEventListener("message", onMessage);
-        reject(new Error("API 读取超时"));
-      }, 120000);
-      function onMessage(event) {
-        if (event.source !== window || event.origin !== location.origin) return;
-        const data = event.data;
-        if (!data || data.source !== RESPONSE || data.id !== requestId) return;
-        clearTimeout(timer);
-        window.removeEventListener("message", onMessage);
-        if (data.ok) resolve(data.conversation);
-        else reject(new Error(data.error || "API 读取失败"));
-      }
-      window.addEventListener("message", onMessage);
-      const send = () => window.postMessage({
-        source: REQUEST,
-        id: requestId,
+      chrome.runtime.sendMessage({
+        type: "CCR_API_READ",
         conversationId: id,
         projectId: projectId()
-      }, location.origin);
-      if (bridgeReady) send();
-      else setTimeout(send, 120);
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        if (response?.ok && response.conversation) resolve(response.conversation);
+        else reject(new Error(response?.error || "API 读取失败"));
+      });
     });
   }
 
@@ -117,7 +89,7 @@
       if (!message) continue;
       const role = message.author?.role;
       const type = message.content?.content_type || "unknown";
-      if (!new Set(["user", "assistant"]).has(role)) continue;
+      if (!["user", "assistant"].includes(role)) continue;
       if (DISPLAYED_THINKING_TYPES.has(type)) continue;
       if (message.metadata?.is_visually_hidden_from_conversation) continue;
       const text = textFromContent(message.content);
@@ -133,26 +105,25 @@
       });
     }
 
-    const thinking = [];
+    const displayedThinking = [];
     for (const [nodeId, node] of Object.entries(mapping)) {
       const message = node?.message;
       if (!message) continue;
       const type = message.content?.content_type || "unknown";
       if (!DISPLAYED_THINKING_TYPES.has(type)) continue;
-      const title =
-        message.content?.title ??
-        message.content?.summary_title ??
-        message.metadata?.title ??
-        message.metadata?.reasoning_title ??
-        null;
-      thinking.push({
+      displayedThinking.push({
         nodeId,
         messageId: message.id ?? null,
         parent: node.parent ?? null,
         children: Array.isArray(node.children) ? node.children : [],
         onCurrentPath: pathSet.has(nodeId),
         sourceType: type,
-        title,
+        title:
+          message.content?.title ??
+          message.content?.summary_title ??
+          message.metadata?.title ??
+          message.metadata?.reasoning_title ??
+          null,
         text: textFromContent(message.content),
         createTime: message.create_time ?? null,
         visuallyHidden: Boolean(message.metadata?.is_visually_hidden_from_conversation),
@@ -168,7 +139,7 @@
       updateTime: conversation.update_time ?? null,
       source: conversation.catchat_api_source ?? { mode: "unknown" },
       messages,
-      displayedThinking: thinking
+      displayedThinking
     };
   }
 
@@ -176,14 +147,12 @@
     return role === "user" ? "主人" : role === "assistant" ? "猫猫" : role;
   }
 
-  function isoTime(seconds) {
-    if (typeof seconds !== "number" || !Number.isFinite(seconds)) return null;
-    const date = new Date(seconds * 1000);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
-  }
-
   function safeFilename(value) {
-    return String(value || "chat").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/\s+/g, " ").trim().slice(0, 100) || "chat";
+    return String(value || "chat")
+      .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 100) || "chat";
   }
 
   function download(filename, content, type) {
@@ -258,8 +227,7 @@
       cachedConversation = await requestConversation();
       cachedNormalized = normalizeConversation(cachedConversation);
       const mode = cachedNormalized.source?.mode || "unknown";
-      const thoughts = cachedNormalized.displayedThinking.length;
-      setApiStatus(`API 已读｜正文 ${cachedNormalized.messages.length} 条｜思考摘要 ${thoughts} 条｜${mode}`);
+      setApiStatus(`API 已读｜正文 ${cachedNormalized.messages.length} 条｜思考摘要 ${cachedNormalized.displayedThinking.length} 条｜${mode}`);
       setExportEnabled(true);
     } catch (error) {
       cachedConversation = null;
@@ -316,7 +284,6 @@
     md.onclick = exportApiMarkdown;
     raw.onclick = exportRawJson;
     thinking.onclick = exportThinkingProbe;
-    injectBridge();
   }
 
   const timer = setInterval(() => {
