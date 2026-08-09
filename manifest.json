@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CatChat Rescuer",
-  "version": "0.4.3",
-  "description": "Locally capture and incrementally archive long ChatGPT conversations as Markdown and JSON.",
+  "version": "0.4.4",
+  "description": "Archive ChatGPT conversations and displayed thinking traces, with API-first reading and legacy rescue tools.",
   "permissions": [
     "scripting",
     "activeTab"
@@ -25,7 +25,8 @@
       ],
       "js": [
         "content.js",
-        "api-experiment.js"
+        "api-experiment.js",
+        "thinking-export.js"
       ],
       "css": [
         "style.css"
