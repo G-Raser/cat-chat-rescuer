@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "尾痕 | CatLog",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Archive ChatGPT conversations and displayed thinking traces with API-first reading and legacy rescue tools.",
   "permissions": [
     "scripting",
@@ -27,7 +27,8 @@
         "boot-hide.js",
         "content.js",
         "api-data.js",
-        "ui-controller.js"
+        "ui-controller.js",
+        "inline-thinking-export.js"
       ],
       "css": [
         "style.css",
