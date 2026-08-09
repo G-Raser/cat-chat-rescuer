@@ -26,7 +26,8 @@
       "js": [
         "content.js",
         "api-experiment.js",
-        "thinking-export.js"
+        "thinking-export.js",
+        "version-badge.js"
       ],
       "css": [
         "style.css"
