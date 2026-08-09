@@ -43,15 +43,8 @@
   function requestConversation(targetId, targetProjectId = null) {
     if (!targetId) return Promise.reject(new Error("没有可用的 conversation ID"));
     return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({
-        type: "CCR_API_READ",
-        conversationId: targetId,
-        projectId: targetProjectId
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
+      chrome.runtime.sendMessage({ type: "CCR_API_READ", conversationId: targetId, projectId: targetProjectId }, (response) => {
+        if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
         if (response?.ok && response.conversation) resolve(response.conversation);
         else reject(new Error(response?.error || "API 读取失败"));
       });
@@ -89,7 +82,7 @@
         if (text) pieces.push(text);
       }
     }
-    for (const key of ["text", "summary", "result", "code"]) {
+    for (const key of ["text", "content", "summary", "result", "code"]) {
       const text = textFromValue(content[key]).trim();
       if (text) pieces.push(text);
     }
@@ -113,6 +106,104 @@
     return reversed.reverse();
   }
 
+  function parseThoughtEntries(content) {
+    if (!Array.isArray(content?.thoughts)) return [];
+    return content.thoughts.map((entry, index) => ({
+      index,
+      summary: typeof entry?.summary === "string" ? entry.summary.trim() : "",
+      content: typeof entry?.content === "string" ? entry.content.trim() : "",
+      finished: Boolean(entry?.finished),
+      chunks: Array.isArray(entry?.chunks) ? entry.chunks : []
+    })).filter((entry) => entry.summary || entry.content || entry.chunks.length);
+  }
+
+  function thinkingItem(nodeId, node, pathSet) {
+    const message = node?.message;
+    if (!message) return null;
+    const type = message.content?.content_type || "unknown";
+    if (!DISPLAYED_THINKING_TYPES.has(type)) return null;
+    const metadata = message.metadata ?? {};
+    const common = {
+      nodeId,
+      messageId: message.id ?? null,
+      parent: node.parent ?? null,
+      children: Array.isArray(node.children) ? node.children : [],
+      onCurrentPath: pathSet.has(nodeId),
+      sourceType: type,
+      createTime: message.create_time ?? null,
+      visuallyHidden: Boolean(metadata.is_visually_hidden_from_conversation),
+      turnExchangeId: metadata.turn_exchange_id ?? null,
+      workingTurnId: metadata.working_turn_id ?? null,
+      model: metadata.model_slug ?? metadata.resolved_model_slug ?? null,
+      content: message.content,
+      metadata
+    };
+    if (type === "thoughts") {
+      const entries = parseThoughtEntries(message.content);
+      const withBody = entries.find((entry) => entry.content);
+      const firstSummary = entries.find((entry) => entry.summary);
+      const body = [...new Set(entries.map((entry) => entry.content).filter(Boolean))].join("\n\n");
+      return {
+        ...common,
+        title: withBody?.summary || firstSummary?.summary || null,
+        text: body,
+        entries,
+        sourceAnalysisMessageId: message.content?.source_analysis_msg_id ?? null,
+        summaryType: metadata.summary_type ?? null,
+        toolSummaryType: metadata.tool_summary_type ?? null
+      };
+    }
+    return {
+      ...common,
+      title: null,
+      text: typeof message.content?.content === "string" ? message.content.content.trim() : "",
+      entries: [],
+      durationSec: Number.isFinite(metadata.finished_duration_sec) ? metadata.finished_duration_sec : null,
+      recapType: metadata.reasoning_recap_type ?? null,
+      reasoningStatus: metadata.reasoning_status ?? null
+    };
+  }
+
+  function buildThinkingTurns(items) {
+    const groups = new Map();
+    for (const item of items) {
+      const key = item.turnExchangeId || item.workingTurnId || `node:${item.nodeId}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    }
+    const turns = [];
+    for (const [turnId, group] of groups) {
+      group.sort((a, b) => (a.createTime ?? 0) - (b.createTime ?? 0));
+      const thoughtItems = group.filter((item) => item.sourceType === "thoughts");
+      const recapItems = group.filter((item) => item.sourceType === "reasoning_recap");
+      const entries = thoughtItems.flatMap((item) => item.entries || []);
+      const withBody = entries.find((entry) => entry.content);
+      const firstSummary = entries.find((entry) => entry.summary);
+      const title = withBody?.summary || firstSummary?.summary || null;
+      const text = [...new Set(entries.map((entry) => entry.content).filter(Boolean))].join("\n\n");
+      const summaryOnly = [...new Set(entries.filter((entry) => !entry.content && entry.summary).map((entry) => entry.summary))];
+      const lastRecap = recapItems.at(-1) || null;
+      turns.push({
+        turnId,
+        onCurrentPath: group.some((item) => item.onCurrentPath),
+        createTime: group[0]?.createTime ?? null,
+        title,
+        text,
+        summaryOnly,
+        durationSec: lastRecap?.durationSec ?? null,
+        recapText: lastRecap?.text || null,
+        recapType: lastRecap?.recapType ?? null,
+        reasoningStatus: lastRecap?.reasoningStatus ?? null,
+        model: group.find((item) => item.model)?.model ?? null,
+        sourceTypes: [...new Set(group.map((item) => item.sourceType))],
+        thoughtNodeCount: thoughtItems.length,
+        recapNodeCount: recapItems.length,
+        items: group
+      });
+    }
+    return turns.sort((a, b) => (a.createTime ?? 0) - (b.createTime ?? 0));
+  }
+
   function normalizeConversation(conversation) {
     const mapping = conversation?.mapping || {};
     const path = currentPath(conversation);
@@ -129,44 +220,16 @@
       if (message.metadata?.is_visually_hidden_from_conversation) continue;
       const text = textFromContent(message.content);
       if (!text) continue;
-      messages.push({
-        id: message.id || nodeId,
-        nodeId,
-        role,
-        text,
-        createTime: message.create_time ?? null,
-        model: message.metadata?.model_slug ?? null,
-        contentType: type
-      });
+      messages.push({ id: message.id || nodeId, nodeId, role, text, createTime: message.create_time ?? null, model: message.metadata?.model_slug ?? null, contentType: type });
     }
 
     const displayedThinking = [];
     for (const [nodeId, node] of Object.entries(mapping)) {
-      const message = node?.message;
-      if (!message) continue;
-      const type = message.content?.content_type || "unknown";
-      if (!DISPLAYED_THINKING_TYPES.has(type)) continue;
-      displayedThinking.push({
-        nodeId,
-        messageId: message.id ?? null,
-        parent: node.parent ?? null,
-        children: Array.isArray(node.children) ? node.children : [],
-        onCurrentPath: pathSet.has(nodeId),
-        sourceType: type,
-        title:
-          message.content?.title ??
-          message.content?.summary_title ??
-          message.metadata?.title ??
-          message.metadata?.reasoning_title ??
-          null,
-        text: textFromContent(message.content),
-        createTime: message.create_time ?? null,
-        visuallyHidden: Boolean(message.metadata?.is_visually_hidden_from_conversation),
-        content: message.content,
-        metadata: message.metadata ?? {}
-      });
+      const item = thinkingItem(nodeId, node, pathSet);
+      if (item) displayedThinking.push(item);
     }
-
+    displayedThinking.sort((a, b) => (a.createTime ?? 0) - (b.createTime ?? 0));
+    const thinkingTurns = buildThinkingTurns(displayedThinking);
     return {
       title: conversation.title || document.title || "Untitled ChatGPT Conversation",
       conversationId: conversation.conversation_id ?? conversation.id ?? null,
@@ -175,7 +238,9 @@
       source: conversation.catchat_api_source ?? { mode: "unknown" },
       messages,
       displayedThinking,
-      displayedThinkingOnCurrentPath: displayedThinking.filter((item) => item.onCurrentPath)
+      displayedThinkingOnCurrentPath: displayedThinking.filter((item) => item.onCurrentPath),
+      thinkingTurns,
+      thinkingTurnsOnCurrentPath: thinkingTurns.filter((turn) => turn.onCurrentPath)
     };
   }
 
@@ -185,11 +250,7 @@
   }
 
   function safeFilename(value) {
-    return String(value || "chat")
-      .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 100) || "chat";
+    return String(value || "chat").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").replace(/\s+/g, " ").trim().slice(0, 100) || "chat";
   }
 
   function download(filename, content, type) {
@@ -219,8 +280,9 @@
     md += `user_label: ${JSON.stringify(labels.user)}\n`;
     md += `assistant_label: ${JSON.stringify(labels.assistant)}\n`;
     md += `message_count: ${data.messages.length}\n`;
-    md += `displayed_thinking_current_path_count: ${data.displayedThinkingOnCurrentPath.length}\n`;
-    md += `displayed_thinking_tree_count: ${data.displayedThinking.length}\n`;
+    md += `thinking_turn_current_path_count: ${data.thinkingTurnsOnCurrentPath.length}\n`;
+    md += `thinking_turn_tree_count: ${data.thinkingTurns.length}\n`;
+    md += `thinking_raw_node_count: ${data.displayedThinking.length}\n`;
     md += "---\n\n";
     md += `# ${data.title}\n\n`;
     for (let i = 0; i < data.messages.length; i += 1) {
@@ -244,8 +306,11 @@
       apiSource: data.source,
       contentTypes,
       displayedThinkingTypes: [...DISPLAYED_THINKING_TYPES],
-      currentPathCount: data.displayedThinkingOnCurrentPath.length,
-      treeCount: data.displayedThinking.length,
+      currentPathNodeCount: data.displayedThinkingOnCurrentPath.length,
+      treeNodeCount: data.displayedThinking.length,
+      currentPathTurnCount: data.thinkingTurnsOnCurrentPath.length,
+      treeTurnCount: data.thinkingTurns.length,
+      turns: data.thinkingTurns,
       items: data.displayedThinking
     };
   }
@@ -269,7 +334,7 @@
       cachedConversation = await requestConversation(targetId, targetProjectId);
       cachedNormalized = normalizeConversation(cachedConversation);
       const mode = cachedNormalized.source?.mode || "unknown";
-      setApiStatus(`已读｜正文 ${cachedNormalized.messages.length}｜思考 当前 ${cachedNormalized.displayedThinkingOnCurrentPath.length} / 全树 ${cachedNormalized.displayedThinking.length}｜${mode}`);
+      setApiStatus(`已读｜正文 ${cachedNormalized.messages.length}｜思考回合 当前 ${cachedNormalized.thinkingTurnsOnCurrentPath.length} / 全树 ${cachedNormalized.thinkingTurns.length}｜${mode}`);
       setExportEnabled(true);
     } catch (error) {
       cachedConversation = null;
@@ -280,10 +345,7 @@
 
   async function readCurrentApi() {
     const id = conversationId();
-    if (!id) {
-      setApiStatus("当前页面没有识别到 conversation ID");
-      return;
-    }
+    if (!id) return setApiStatus("当前页面没有识别到 conversation ID");
     await performRead(id, projectIdFromPath(), "当前对话 ");
   }
 
@@ -313,7 +375,7 @@
     if (!cachedNormalized || !cachedConversation) return;
     const probe = thinkingProbe(cachedNormalized, cachedConversation);
     download(`${baseName()}.thinking-probe.json`, JSON.stringify(probe, null, 2), "application/json;charset=utf-8");
-    setApiStatus(`思考探针已导出｜当前 ${probe.currentPathCount} / 全树 ${probe.treeCount}`);
+    setApiStatus(`思考探针已导出｜回合 当前 ${probe.currentPathTurnCount} / 全树 ${probe.treeTurnCount}`);
   }
 
   function setCollapsed(panel, collapsed) {
@@ -346,10 +408,8 @@
     const count = panel.querySelector(".ccr-count");
     const timers = panel.querySelector(".ccr-timers");
     const legacyStatus = panel.querySelector("#ccr-status");
-
     const body = document.createElement("div");
     body.className = "ccr-body";
-
     const quick = document.createElement("section");
     quick.className = "ccr-quick";
     quick.innerHTML = `
@@ -375,18 +435,14 @@
           <label><span>助手</span><input id="ccr-label-assistant" type="text" autocomplete="off" maxlength="40"></label>
           <button id="ccr-label-reset" type="button">恢复 User / Assistant</button>
         </div>
-      </details>
-    `;
+      </details>`;
 
     const legacy = document.createElement("details");
     legacy.className = "ccr-legacy";
     const summary = document.createElement("summary");
     summary.textContent = "传统 DOM / 增量抢救工具";
     legacy.appendChild(summary);
-    for (const element of [count, timers, originalButtons, legacyStatus]) {
-      if (element) legacy.appendChild(element);
-    }
-
+    for (const element of [count, timers, originalButtons, legacyStatus]) if (element) legacy.appendChild(element);
     body.append(quick, legacy);
     panel.appendChild(body);
 
@@ -395,9 +451,7 @@
     quick.querySelector("#ccr-api-md").onclick = exportApiMarkdown;
     quick.querySelector("#ccr-api-raw").onclick = exportRawJson;
     quick.querySelector("#ccr-api-thinking").onclick = exportThinkingProbe;
-    quick.querySelector("#ccr-api-reference").addEventListener("keydown", (event) => {
-      if (event.key === "Enter") readReferenceApi();
-    });
+    quick.querySelector("#ccr-api-reference").addEventListener("keydown", (event) => { if (event.key === "Enter") readReferenceApi(); });
 
     const userLabelInput = quick.querySelector("#ccr-label-user");
     const assistantLabelInput = quick.querySelector("#ccr-label-assistant");
@@ -407,14 +461,8 @@
       assistantLabelInput.value = labels.assistant;
     };
     refreshLabelInputs();
-    userLabelInput.addEventListener("change", () => {
-      saveExportLabel(USER_LABEL_KEY, userLabelInput.value);
-      refreshLabelInputs();
-    });
-    assistantLabelInput.addEventListener("change", () => {
-      saveExportLabel(ASSISTANT_LABEL_KEY, assistantLabelInput.value);
-      refreshLabelInputs();
-    });
+    userLabelInput.addEventListener("change", () => { saveExportLabel(USER_LABEL_KEY, userLabelInput.value); refreshLabelInputs(); });
+    assistantLabelInput.addEventListener("change", () => { saveExportLabel(ASSISTANT_LABEL_KEY, assistantLabelInput.value); refreshLabelInputs(); });
     quick.querySelector("#ccr-label-reset").onclick = () => {
       localStorage.removeItem(USER_LABEL_KEY);
       localStorage.removeItem(ASSISTANT_LABEL_KEY);
