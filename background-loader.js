@@ -6,7 +6,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   try {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ["thinking-export.js", "version-badge.js"]
+      files: ["thinking-export-v2.js", "version-badge.js"]
     });
   } catch (error) {
     console.error("[CatChat Rescuer] thinking export inject failed", error);
