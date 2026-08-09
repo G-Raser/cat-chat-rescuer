@@ -1,10 +1,10 @@
 # Privacy
 
-CatChat Rescuer is designed as a local browser extension for archiving ChatGPT conversations and displayed thinking traces.
+**尾痕 | CatLog** is designed as a local browser extension for archiving ChatGPT conversations and displayed thinking traces.
 
 ## Data flow
 
-The current experimental API-first version can use two local workflows:
+The current API-first version can use two local workflows:
 
 - **API-first reading:** uses the browser's already authenticated ChatGPT session to request conversation data that the current account can access, then keeps the result in extension/page memory for export.
 - **Legacy DOM rescue:** reads text rendered in the active ChatGPT page and can store captured messages in browser-local IndexedDB for incremental rescue.
@@ -46,6 +46,6 @@ API-first conversation data is intended to remain in memory for the current page
 
 ## External service boundary
 
-CatChat Rescuer communicates with ChatGPT itself because that is the source of the conversation being archived. It does not add a separate archival server or analytics service.
+尾痕 | CatLog communicates with ChatGPT itself because that is the source of the conversation being archived. It does not add a separate archival server or analytics service.
 
 ChatGPT's own handling of account/session/conversation data is governed by the service itself and is outside this extension's control.
