@@ -1,6 +1,7 @@
 (() => {
   const PANEL_ID = "catchat-rescuer-v030-panel";
   const DISPLAYED_THINKING_TYPES = new Set(["thoughts", "reasoning_recap"]);
+  const COLLAPSE_KEY = "catchat-rescuer-panel-collapsed";
   let cachedConversation = null;
   let cachedNormalized = null;
 
@@ -10,21 +11,38 @@
     return document.querySelector("[data-conversation-id]")?.getAttribute("data-conversation-id") || null;
   }
 
-  function projectId() {
-    const parts = location.pathname.split("/").filter(Boolean);
+  function projectIdFromPath(pathname = location.pathname) {
+    const parts = pathname.split("/").filter(Boolean);
     const index = parts.lastIndexOf("g");
     const value = parts[index + 1];
     return index >= 0 && typeof value === "string" && value.startsWith("g-p-") ? value : null;
   }
 
-  function requestConversation() {
-    const id = conversationId();
-    if (!id) return Promise.reject(new Error("当前页面没有识别到 conversation ID"));
+  function parseConversationReference(value) {
+    const reference = String(value || "").trim();
+    if (!reference) throw new Error("请粘贴对话链接或 conversation ID");
+    try {
+      const url = new URL(reference);
+      if (!["chatgpt.com", "chat.openai.com"].includes(url.hostname)) throw new Error("不是 ChatGPT 对话链接");
+      const parts = url.pathname.split("/").filter(Boolean);
+      const cIndex = parts.lastIndexOf("c");
+      const id = parts[cIndex + 1];
+      if (cIndex < 0 || !id) throw new Error("链接里没有找到 /c/ 后面的 conversation ID");
+      return { conversationId: id, projectId: projectIdFromPath(url.pathname) };
+    } catch (error) {
+      if (error?.message && !/Invalid URL/i.test(error.message) && /^https?:/i.test(reference)) throw error;
+    }
+    if (/^[A-Za-z0-9_-]{8,}$/.test(reference)) return { conversationId: reference, projectId: null };
+    throw new Error("无法识别这个对话链接或 conversation ID");
+  }
+
+  function requestConversation(targetId, targetProjectId = null) {
+    if (!targetId) return Promise.reject(new Error("没有可用的 conversation ID"));
     return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage({
         type: "CCR_API_READ",
-        conversationId: id,
-        projectId: projectId()
+        conversationId: targetId,
+        projectId: targetProjectId
       }, (response) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
@@ -134,7 +152,7 @@
 
     return {
       title: conversation.title || document.title || "Untitled ChatGPT Conversation",
-      conversationId: conversation.conversation_id ?? conversation.id ?? conversationId(),
+      conversationId: conversation.conversation_id ?? conversation.id ?? null,
       createTime: conversation.create_time ?? null,
       updateTime: conversation.update_time ?? null,
       source: conversation.catchat_api_source ?? { mode: "unknown" },
@@ -220,19 +238,38 @@
     }
   }
 
-  async function readApi() {
-    setApiStatus("API 原文读取中…");
+  async function performRead(targetId, targetProjectId, label) {
+    setApiStatus(`${label}读取中…`);
     setExportEnabled(false);
     try {
-      cachedConversation = await requestConversation();
+      cachedConversation = await requestConversation(targetId, targetProjectId);
       cachedNormalized = normalizeConversation(cachedConversation);
       const mode = cachedNormalized.source?.mode || "unknown";
-      setApiStatus(`API 已读｜正文 ${cachedNormalized.messages.length} 条｜思考摘要 ${cachedNormalized.displayedThinking.length} 条｜${mode}`);
+      setApiStatus(`已读｜正文 ${cachedNormalized.messages.length}｜思考摘要 ${cachedNormalized.displayedThinking.length}｜${mode}`);
       setExportEnabled(true);
     } catch (error) {
       cachedConversation = null;
       cachedNormalized = null;
-      setApiStatus(`API 失败：${error?.message || error}`);
+      setApiStatus(`读取失败：${error?.message || error}`);
+    }
+  }
+
+  async function readCurrentApi() {
+    const id = conversationId();
+    if (!id) {
+      setApiStatus("当前页面没有识别到 conversation ID");
+      return;
+    }
+    await performRead(id, projectIdFromPath(), "当前对话 ");
+  }
+
+  async function readReferenceApi() {
+    const input = document.getElementById("ccr-api-reference");
+    try {
+      const parsed = parseConversationReference(input?.value);
+      await performRead(parsed.conversationId, parsed.projectId, "链接对话 ");
+    } catch (error) {
+      setApiStatus(error?.message || String(error));
     }
   }
 
@@ -245,7 +282,7 @@
   function exportRawJson() {
     if (!cachedConversation) return;
     download(`${baseName()}.raw.json`, JSON.stringify(cachedConversation, null, 2), "application/json;charset=utf-8");
-    setApiStatus("Raw conversation JSON 已导出");
+    setApiStatus("Raw conversation JSON 已导出到本机");
   }
 
   function exportThinkingProbe() {
@@ -255,35 +292,83 @@
     setApiStatus(`思考探针已导出｜${probe.count} 条 thoughts/reasoning_recap`);
   }
 
+  function setCollapsed(panel, collapsed) {
+    panel.classList.toggle("ccr-collapsed", collapsed);
+    localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
+    const button = panel.querySelector("#ccr-hide");
+    if (button) {
+      button.textContent = collapsed ? "+" : "−";
+      button.title = collapsed ? "展开猫茶抢救器" : "收起猫茶抢救器";
+    }
+  }
+
   function attachUi(panel) {
-    if (document.getElementById("ccr-api-read")) return;
-    const buttons = panel.querySelector(".ccr-buttons");
-    if (!buttons) return;
-    const read = document.createElement("button");
-    read.id = "ccr-api-read";
-    read.textContent = "🐾 API读取";
-    const md = document.createElement("button");
-    md.id = "ccr-api-md";
-    md.textContent = "API MD";
-    const raw = document.createElement("button");
-    raw.id = "ccr-api-raw";
-    raw.textContent = "Raw JSON";
-    const thinking = document.createElement("button");
-    thinking.id = "ccr-api-thinking";
-    thinking.textContent = "思考探针";
-    md.disabled = true;
-    raw.disabled = true;
-    thinking.disabled = true;
-    buttons.append(read, md, raw, thinking);
-    const status = document.createElement("div");
-    status.id = "ccr-api-status";
-    status.className = "ccr-status";
-    status.textContent = "🐾 API 实验层待命｜现有 v0.4.2 DOM/增量功能保持原样";
-    panel.appendChild(status);
-    read.onclick = readApi;
-    md.onclick = exportApiMarkdown;
-    raw.onclick = exportRawJson;
-    thinking.onclick = exportThinkingProbe;
+    if (panel.dataset.ccrModernUi === "1") return;
+    const originalButtons = panel.querySelector(".ccr-buttons");
+    if (!originalButtons) return;
+    panel.dataset.ccrModernUi = "1";
+    panel.classList.add("ccr-modern");
+
+    const title = panel.querySelector(".ccr-title");
+    const titleText = title?.querySelector("span");
+    if (titleText) titleText.textContent = "🐾 猫茶抢救器 · 实验";
+    const collapseButton = panel.querySelector("#ccr-hide");
+    if (collapseButton) collapseButton.onclick = () => setCollapsed(panel, !panel.classList.contains("ccr-collapsed"));
+    if (titleText) {
+      titleText.classList.add("ccr-title-toggle");
+      titleText.onclick = () => setCollapsed(panel, !panel.classList.contains("ccr-collapsed"));
+    }
+
+    const count = panel.querySelector(".ccr-count");
+    const timers = panel.querySelector(".ccr-timers");
+    const legacyStatus = panel.querySelector("#ccr-status");
+
+    const body = document.createElement("div");
+    body.className = "ccr-body";
+
+    const quick = document.createElement("section");
+    quick.className = "ccr-quick";
+    quick.innerHTML = `
+      <div class="ccr-section-heading">
+        <div><strong>快速读取</strong><small>API 直读，不用滚动页面</small></div>
+        <span class="ccr-badge">0.4.3</span>
+      </div>
+      <button id="ccr-api-read" class="ccr-primary" type="button">读取当前对话</button>
+      <div class="ccr-reference-row">
+        <input id="ccr-api-reference" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="粘贴 /c/… 链接或 conversation ID">
+        <button id="ccr-api-read-link" type="button">读取</button>
+      </div>
+      <div class="ccr-export-row">
+        <button id="ccr-api-md" type="button" disabled>可读 MD</button>
+        <button id="ccr-api-raw" type="button" disabled>Raw JSON</button>
+        <button id="ccr-api-thinking" type="button" disabled>思考探针</button>
+      </div>
+      <div id="ccr-api-status" class="ccr-api-status">API 实验层待命</div>
+    `;
+
+    const legacy = document.createElement("details");
+    legacy.className = "ccr-legacy";
+    const summary = document.createElement("summary");
+    summary.textContent = "传统 DOM / 增量抢救工具";
+    legacy.appendChild(summary);
+    for (const element of [count, timers, originalButtons, legacyStatus]) {
+      if (element) legacy.appendChild(element);
+    }
+
+    body.append(quick, legacy);
+    panel.appendChild(body);
+
+    quick.querySelector("#ccr-api-read").onclick = readCurrentApi;
+    quick.querySelector("#ccr-api-read-link").onclick = readReferenceApi;
+    quick.querySelector("#ccr-api-md").onclick = exportApiMarkdown;
+    quick.querySelector("#ccr-api-raw").onclick = exportRawJson;
+    quick.querySelector("#ccr-api-thinking").onclick = exportThinkingProbe;
+    quick.querySelector("#ccr-api-reference").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") readReferenceApi();
+    });
+
+    const collapsed = localStorage.getItem(COLLAPSE_KEY) !== "0";
+    setCollapsed(panel, collapsed);
   }
 
   const timer = setInterval(() => {
