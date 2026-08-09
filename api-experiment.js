@@ -2,6 +2,10 @@
   const PANEL_ID = "catchat-rescuer-v030-panel";
   const DISPLAYED_THINKING_TYPES = new Set(["thoughts", "reasoning_recap"]);
   const COLLAPSE_KEY = "catchat-rescuer-panel-collapsed";
+  const USER_LABEL_KEY = "catchat-rescuer-export-label-user";
+  const ASSISTANT_LABEL_KEY = "catchat-rescuer-export-label-assistant";
+  const DEFAULT_USER_LABEL = "User";
+  const DEFAULT_ASSISTANT_LABEL = "Assistant";
   let cachedConversation = null;
   let cachedNormalized = null;
 
@@ -52,6 +56,19 @@
         else reject(new Error(response?.error || "API 读取失败"));
       });
     });
+  }
+
+  function exportLabels() {
+    return {
+      user: localStorage.getItem(USER_LABEL_KEY)?.trim() || DEFAULT_USER_LABEL,
+      assistant: localStorage.getItem(ASSISTANT_LABEL_KEY)?.trim() || DEFAULT_ASSISTANT_LABEL
+    };
+  }
+
+  function saveExportLabel(key, value) {
+    const normalized = String(value || "").trim();
+    if (normalized) localStorage.setItem(key, normalized);
+    else localStorage.removeItem(key);
   }
 
   function textFromValue(value) {
@@ -157,12 +174,14 @@
       updateTime: conversation.update_time ?? null,
       source: conversation.catchat_api_source ?? { mode: "unknown" },
       messages,
-      displayedThinking
+      displayedThinking,
+      displayedThinkingOnCurrentPath: displayedThinking.filter((item) => item.onCurrentPath)
     };
   }
 
   function roleLabel(role) {
-    return role === "user" ? "主人" : role === "assistant" ? "猫猫" : role;
+    const labels = exportLabels();
+    return role === "user" ? labels.user : role === "assistant" ? labels.assistant : role;
   }
 
   function safeFilename(value) {
@@ -191,13 +210,17 @@
   }
 
   function markdownFromNormalized(data) {
+    const labels = exportLabels();
     let md = "---\n";
     md += `title: ${JSON.stringify(data.title)}\n`;
     md += `conversation_id: ${JSON.stringify(data.conversationId)}\n`;
     md += `source: ${JSON.stringify("chatgpt_conversation_api_experiment")}\n`;
     md += `api_mode: ${JSON.stringify(data.source?.mode || "unknown")}\n`;
+    md += `user_label: ${JSON.stringify(labels.user)}\n`;
+    md += `assistant_label: ${JSON.stringify(labels.assistant)}\n`;
     md += `message_count: ${data.messages.length}\n`;
-    md += `displayed_thinking_count: ${data.displayedThinking.length}\n`;
+    md += `displayed_thinking_current_path_count: ${data.displayedThinkingOnCurrentPath.length}\n`;
+    md += `displayed_thinking_tree_count: ${data.displayedThinking.length}\n`;
     md += "---\n\n";
     md += `# ${data.title}\n\n`;
     for (let i = 0; i < data.messages.length; i += 1) {
@@ -221,7 +244,8 @@
       apiSource: data.source,
       contentTypes,
       displayedThinkingTypes: [...DISPLAYED_THINKING_TYPES],
-      count: data.displayedThinking.length,
+      currentPathCount: data.displayedThinkingOnCurrentPath.length,
+      treeCount: data.displayedThinking.length,
       items: data.displayedThinking
     };
   }
@@ -245,7 +269,7 @@
       cachedConversation = await requestConversation(targetId, targetProjectId);
       cachedNormalized = normalizeConversation(cachedConversation);
       const mode = cachedNormalized.source?.mode || "unknown";
-      setApiStatus(`已读｜正文 ${cachedNormalized.messages.length}｜思考摘要 ${cachedNormalized.displayedThinking.length}｜${mode}`);
+      setApiStatus(`已读｜正文 ${cachedNormalized.messages.length}｜思考 当前 ${cachedNormalized.displayedThinkingOnCurrentPath.length} / 全树 ${cachedNormalized.displayedThinking.length}｜${mode}`);
       setExportEnabled(true);
     } catch (error) {
       cachedConversation = null;
@@ -289,7 +313,7 @@
     if (!cachedNormalized || !cachedConversation) return;
     const probe = thinkingProbe(cachedNormalized, cachedConversation);
     download(`${baseName()}.thinking-probe.json`, JSON.stringify(probe, null, 2), "application/json;charset=utf-8");
-    setApiStatus(`思考探针已导出｜${probe.count} 条 thoughts/reasoning_recap`);
+    setApiStatus(`思考探针已导出｜当前 ${probe.currentPathCount} / 全树 ${probe.treeCount}`);
   }
 
   function setCollapsed(panel, collapsed) {
@@ -344,6 +368,14 @@
         <button id="ccr-api-thinking" type="button" disabled>思考探针</button>
       </div>
       <div id="ccr-api-status" class="ccr-api-status">API 实验层待命</div>
+      <details class="ccr-label-settings">
+        <summary>导出称呼</summary>
+        <div class="ccr-label-grid">
+          <label><span>用户</span><input id="ccr-label-user" type="text" autocomplete="off" maxlength="40"></label>
+          <label><span>助手</span><input id="ccr-label-assistant" type="text" autocomplete="off" maxlength="40"></label>
+          <button id="ccr-label-reset" type="button">恢复 User / Assistant</button>
+        </div>
+      </details>
     `;
 
     const legacy = document.createElement("details");
@@ -366,6 +398,29 @@
     quick.querySelector("#ccr-api-reference").addEventListener("keydown", (event) => {
       if (event.key === "Enter") readReferenceApi();
     });
+
+    const userLabelInput = quick.querySelector("#ccr-label-user");
+    const assistantLabelInput = quick.querySelector("#ccr-label-assistant");
+    const refreshLabelInputs = () => {
+      const labels = exportLabels();
+      userLabelInput.value = labels.user;
+      assistantLabelInput.value = labels.assistant;
+    };
+    refreshLabelInputs();
+    userLabelInput.addEventListener("change", () => {
+      saveExportLabel(USER_LABEL_KEY, userLabelInput.value);
+      refreshLabelInputs();
+    });
+    assistantLabelInput.addEventListener("change", () => {
+      saveExportLabel(ASSISTANT_LABEL_KEY, assistantLabelInput.value);
+      refreshLabelInputs();
+    });
+    quick.querySelector("#ccr-label-reset").onclick = () => {
+      localStorage.removeItem(USER_LABEL_KEY);
+      localStorage.removeItem(ASSISTANT_LABEL_KEY);
+      refreshLabelInputs();
+      setApiStatus("导出称呼已恢复为 User / Assistant");
+    };
 
     const collapsed = localStorage.getItem(COLLAPSE_KEY) !== "0";
     setCollapsed(panel, collapsed);
