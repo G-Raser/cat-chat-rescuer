@@ -15,6 +15,7 @@
   font-size: 11px !important;
   line-height: 1.35 !important;
   font-weight: 400 !important;
+  cursor: pointer !important;
 }
 #catchat-rescuer-v030-panel .ccr-check span {
   font-size: 11px !important;
@@ -22,11 +23,22 @@
   font-weight: 400 !important;
 }
 #catchat-rescuer-v030-panel .ccr-check input[type="checkbox"] {
+  -webkit-appearance: checkbox !important;
+  appearance: auto !important;
   width: 16px !important;
   height: 16px !important;
   min-width: 16px !important;
   flex: 0 0 16px !important;
   margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  accent-color: #cdb9ff !important;
 }
 #catchat-rescuer-v030-panel .ccr-thinking-dev > summary {
   font-size: 11px !important;
