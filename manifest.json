@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CatChat Rescuer",
-  "version": "0.4.8",
+  "version": "0.4.9",
   "description": "Archive ChatGPT conversations and displayed thinking traces, with API-first reading and legacy rescue tools.",
   "permissions": [
     "scripting",
@@ -25,9 +25,7 @@
       ],
       "js": [
         "content.js",
-        "api-experiment.js",
-        "thinking-export-v2.js",
-        "version-badge.js"
+        "unified-controller.js"
       ],
       "css": [
         "style.css"
