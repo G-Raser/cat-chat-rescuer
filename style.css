@@ -150,6 +150,47 @@
   font-size: 11px !important;
   overflow-wrap: anywhere !important;
 }
+#catchat-rescuer-v030-panel .ccr-label-settings {
+  margin-top: 8px !important;
+  border-top: 1px solid rgba(255,255,255,.07) !important;
+  padding-top: 6px !important;
+}
+#catchat-rescuer-v030-panel .ccr-label-settings > summary {
+  cursor: pointer !important;
+  list-style: none !important;
+  color: rgba(247,243,251,.68) !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  user-select: none !important;
+}
+#catchat-rescuer-v030-panel .ccr-label-settings > summary::-webkit-details-marker {
+  display: none !important;
+}
+#catchat-rescuer-v030-panel .ccr-label-settings > summary::after {
+  content: "＋" !important;
+  float: right !important;
+  opacity: .52 !important;
+}
+#catchat-rescuer-v030-panel .ccr-label-settings[open] > summary::after {
+  content: "−" !important;
+}
+#catchat-rescuer-v030-panel .ccr-label-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 7px !important;
+  margin-top: 7px !important;
+}
+#catchat-rescuer-v030-panel .ccr-label-grid label {
+  display: grid !important;
+  gap: 4px !important;
+  color: rgba(247,243,251,.62) !important;
+  font-size: 10px !important;
+}
+#catchat-rescuer-v030-panel .ccr-label-grid button {
+  grid-column: 1 / -1 !important;
+  background: rgba(255,255,255,.10) !important;
+  color: rgba(247,243,251,.82) !important;
+}
 #catchat-rescuer-v030-panel .ccr-legacy {
   border: 1px solid rgba(255,255,255,.07) !important;
   border-radius: 12px !important;
