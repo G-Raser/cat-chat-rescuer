@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.5.1-panel-recovery-hotfix
+
+Hotfix for the v0.5.0 case where the extension remained installed but the entire in-page panel could fail to appear after an extension reload.
+
+### Added
+
+- Adds a single `chrome.action` recovery path owned by `api-background.js`.
+- Clicking the extension icon on a ChatGPT tab now restores the existing panel or injects the current v0.5.x runtime only: `content.js` → `api-data.js` → `ui-controller.js`.
+- Existing complete panels are only made visible again; they are not needlessly rebuilt.
+
+### Changed
+
+- Keeps declarative content-script loading as the normal path; the extension icon is a recovery / wake-up path, not a required first step.
+- Does not restore the old `background-loader.js` / split-thinking double-injection chain.
+- README installation and troubleshooting instructions now document the recovery behavior.
+
+## v0.5.0-api-first-unified-read
+
+Major experimental architecture update that turns the old DOM-only rescuer into an API-first conversation archiver with displayed-thinking export while retaining legacy rescue tools.
+
+### Added
+
+- Adds `api-background.js` for authenticated conversation reads through the current ChatGPT page session.
+- Adds `api-data.js` to normalize conversation trees, current paths, displayed `thoughts`, and `reasoning_recap` nodes.
+- Adds `ui-controller.js` with three user-facing sections: `读取内容`, `思考轨迹`, and `传统 DOM / 增量抢救工具`.
+- Adds one-read/multi-export behavior: readable Markdown, Raw JSON, and thinking exports share the same in-memory conversation cache.
+- Adds current-conversation and pasted `/c/...` link / conversation-ID reading through the same `读取内容` button.
+- Adds elapsed-time read status such as `⟳ 当前对话 读取中 · 12s`.
+- Adds displayed-thinking Markdown and plain-text exports with current-branch / whole-tree scope.
+- Adds developer-only complete thinking export and probe output.
+
+### Changed
+
+- Primary thinking counts and default thinking exports now include only turns with actual non-empty `thoughts` body content.
+- Pure `Worked for ...`, recap-only turns, and empty tool-summary turns no longer count as normal thinking turns.
+- Legacy DOM capture, State, and incremental scanning remain available as a fallback instead of being the primary export path.
+- README and privacy documentation were rewritten for the API-first data flow and sensitivity of Raw JSON / thinking exports.
+
+### Notes
+
+- The default thinking export is intended for user-visible / recoverable displayed-thinking summaries, not never-displayed hidden reasoning.
+- Full conversation-tree reads preserve branches when the full endpoint succeeds; pagination fallback mainly guarantees the current path.
+
 ## v0.4.2-session-incremental-scan
 
 Fixes the real full-window failure where incremental scan could be misled by the old local captured cache.
