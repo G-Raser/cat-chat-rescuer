@@ -4,8 +4,12 @@ output/
 out/
 archives/
 archive/
+private-test-data/
 catchat-*.md
 catchat-*.json
+*.raw.json
+*.thinking-probe.json
+*.diagnostic.json
 *.patch.md
 *.patch.json
 *.combined-full.md
