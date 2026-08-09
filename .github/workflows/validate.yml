@@ -26,6 +26,7 @@ jobs:
           node --check api-background.js
           node --check api-data.js
           node --check ui-controller.js
+          node --check inline-thinking-export.js
 
       - name: Validate manifest JSON
         run: node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8')); console.log('manifest.json is valid')"
