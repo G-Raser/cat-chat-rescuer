@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.5.5-thinking-timestamp-layout
+
+Small readable-export layout cleanup before release acceptance.
+
+### Changed
+
+- Moves thinking-turn timestamps from directly under the heading to the bottom of each turn's metadata.
+- Thinking Markdown now orders readable content as body → `Worked for ...` → model → time.
+- Thinking TXT also places time at the end of each turn instead of before the body.
+- Keeps the existing timestamp checkbox behavior and underlying `create_time` data unchanged.
+- README updated for v0.5.5.
+
 ## v0.5.4-ui-typography-polish
 
 Small typography cleanup for the modern thinking panel.
@@ -125,7 +137,6 @@ Fixes the unsafe incremental behavior where a weak one-message anchor could be t
 - Tracks weak 1–2 message matches as weak matches only.
 - Keeps scanning when only weak matches are found.
 - Fails safely without exporting files if a stable anchor match is not found.
-- Adds `min_safe_anchor_match` metadata to rescue-state and incremental outputs.
 
 ### Notes
 
