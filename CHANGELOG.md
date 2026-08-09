@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.5.6-checkbox-and-branding
+
+Release-candidate polish and final naming pass before merging the API-first branch to main.
+
+### Fixed
+
+- Restores normal checkbox behavior for both `导出时间戳` controls after generic text-input CSS made them visually and functionally unreliable.
+- Keeps checkbox size, typography, and accent styling consistent without inheriting text-field padding/background/border rules.
+
+### Changed
+
+- Renames the public extension to **尾痕 | CatLog**.
+- Removes the visible experimental label from the main product branding.
+- Updates manifest metadata, README, privacy text, and panel branding for the new name.
+- Keeps the repository slug unchanged to avoid unnecessary link churn.
+
 ## v0.5.5-thinking-timestamp-layout
 
 Small readable-export layout cleanup before release acceptance.
