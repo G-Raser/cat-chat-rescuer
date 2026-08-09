@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CatChat Rescuer",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Locally capture and incrementally archive long ChatGPT conversations as Markdown and JSON.",
   "permissions": [
     "scripting",
@@ -24,7 +24,8 @@
         "https://chat.openai.com/*"
       ],
       "js": [
-        "content.js"
+        "content.js",
+        "api-experiment.js"
       ],
       "css": [
         "style.css"
