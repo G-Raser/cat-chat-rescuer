@@ -89,7 +89,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     const state = probe?.[0]?.result || {};
     if (state.hasPanel && state.hasUnified) return;
     await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["style.css"] });
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js", "api-data.js"] });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["boot-hide.js", "content.js", "api-data.js"] });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => { delete globalThis.__CCR_UI_CONTROLLER__; } });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["ui-controller.js"] });
   } catch (error) {
