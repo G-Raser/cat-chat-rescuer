@@ -103,11 +103,11 @@
       const title = t.title || t.summaryOnly?.[0] || t.recapText || `思考回合 ${i + 1}`;
       md += `## ${String(i + 1).padStart(4, "0")}｜${title}\n\n`;
       const ts = includeTimestamps ? timestampIso(t.createTime) : null;
-      if (ts) md += `> time: ${ts}\n\n`;
       if (t.text) md += `${t.text}\n\n`;
       if (full) for (const s of t.summaryOnly || []) if (s && s !== title) md += `- 摘要：${s}\n`;
       if (t.text && t.recapText) md += `- ${t.recapText}\n`;
       if (t.text && t.model) md += `- model: ${t.model}\n`;
+      if (ts) md += `- time: ${ts}\n`;
       md += "\n";
     });
     return md;
@@ -118,10 +118,10 @@
       const title = t.title || t.summaryOnly?.[0] || t.recapText || `思考回合 ${i + 1}`;
       lines.push(`[${String(i + 1).padStart(4, "0")}] ${title}`);
       const ts = includeTimestamps ? timestampIso(t.createTime) : null;
-      if (ts) lines.push(`time: ${ts}`);
       if (t.text) lines.push(t.text);
       if (full) for (const s of t.summaryOnly || []) if (s && s !== title) lines.push(s);
       if (full && t.recapText) lines.push(t.recapText);
+      if (ts) lines.push(`time: ${ts}`);
       lines.push("");
     });
     return lines.join("\n");
