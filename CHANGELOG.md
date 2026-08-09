@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.3-ui-polish
+
+Small visual consistency pass for the modern API-first panel.
+
+### Changed
+
+- Aligns the version badge with the fold control on the right side of section headers instead of leaving the badge floating in the middle.
+- Normalizes both `导出时间戳` controls to the same font size, line height, checkbox size, and alignment.
+- Adds `ui-polish.css` after the base stylesheet so these adjustments stay isolated from reading/export logic.
+- README updated for v0.5.3 and the new polish stylesheet.
+
 ## v0.5.2-export-options-and-ui-boot
 
 Improves the modern API-first UI startup and restores optional timestamps in readable exports.
