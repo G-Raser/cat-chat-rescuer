@@ -68,3 +68,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
   return true;
 });
+
+chrome.action.onClicked.addListener(async (tab) => {
+  if (!tab.id || !tab.url || !/^https:\/\/(chatgpt\.com|chat\.openai\.com)\//.test(tab.url)) return;
+  try {
+    const probe = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const panel = document.getElementById("catchat-rescuer-v030-panel");
+        const unified = document.getElementById("ccr-unified-body");
+        if (panel) {
+          panel.style.display = "block";
+          panel.style.visibility = "visible";
+          panel.style.opacity = "1";
+          panel.style.zIndex = "2147483647";
+        }
+        return { hasPanel: Boolean(panel), hasUnified: Boolean(unified) };
+      }
+    });
+    const state = probe?.[0]?.result || {};
+    if (state.hasPanel && state.hasUnified) return;
+    await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["style.css"] });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js", "api-data.js"] });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => { delete globalThis.__CCR_UI_CONTROLLER__; } });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["ui-controller.js"] });
+  } catch (error) {
+    console.error("[CatChat Rescuer] panel recovery injection failed", error);
+  }
+});
