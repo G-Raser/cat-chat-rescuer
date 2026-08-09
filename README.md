@@ -1,4 +1,4 @@
-# CatChat Rescuer v0.5.0
+# CatChat Rescuer v0.5.1
 
 CatChat Rescuer 是一个用于归档 ChatGPT 对话、保存已展示思考轨迹，并在必要时抢救超长对话的 Edge / Chrome 扩展。
 
@@ -6,9 +6,9 @@ CatChat Rescuer 是一个用于归档 ChatGPT 对话、保存已展示思考轨�
 
 > 非官方工具，与 OpenAI 无关联。它依赖 ChatGPT 当前网页和内部接口行为，因此页面或接口变化可能导致部分功能暂时失效。
 
-## v0.5.0 的主要结构
+## 当前结构
 
-面板现在分为三部分：
+面板分为三部分：
 
 1. **读取内容**：统一读取一次 conversation JSON。
 2. **思考轨迹**：使用同一份已读取缓存导出 ChatGPT 已展示 / 可恢复的 `thoughts` 内容。
@@ -32,15 +32,7 @@ CatChat Rescuer 是一个用于归档 ChatGPT 对话、保存已展示思考轨�
 
 ### 读取另一个对话
 
-不需要打开目标对话。
-
-在输入框粘贴：
-
-```text
-https://chatgpt.com/c/<conversation-id>
-```
-
-也可以直接粘贴 conversation ID，然后点击同一个 `读取内容` 按钮。
+不需要打开目标对话。在输入框粘贴 ChatGPT `/c/...` 链接或直接粘贴 conversation ID，再点击同一个 `读取内容` 按钮。
 
 如果目标属于 ChatGPT Project，扩展会尽量从链接中识别 project ID，并优先尝试带项目上下文的完整读取。
 
@@ -50,9 +42,7 @@ https://chatgpt.com/c/<conversation-id>
 
 ### 默认导出
 
-默认主功能只把 **真正有正文内容的 `thoughts` 回合**算作“思考回合”。
-
-因此以下内容不会单独占据主计数或主导出：
+默认主功能只把 **真正有正文内容的 `thoughts` 回合**算作“思考回合”。因此以下内容不会单独占据主计数或主导出：
 
 - `Worked for 4s`
 - `Worked for a few seconds`
@@ -68,9 +58,7 @@ https://chatgpt.com/c/<conversation-id>
 
 ### 完整原始轨迹
 
-开发诊断区域仍保留完整模式，用于结构研究和排错。它可以包含纯 recap、工具摘要以及没有正文的原始思考回合。
-
-正常阅读建议使用默认的 `思考轨迹 MD` 或 `总文本 TXT`。
+开发诊断区域仍保留完整模式，用于结构研究和排错。它可以包含纯 recap、工具摘要以及没有正文的原始思考回合。正常阅读建议使用默认的 `思考轨迹 MD` 或 `总文本 TXT`。
 
 ## 可读正文导出
 
@@ -95,9 +83,7 @@ Assistant
 ⟳ 当前对话 读取中 · 12s
 ```
 
-这是为了区分“仍在读取超长对话”和“界面已经卡死”。
-
-读取成功后会显示正文数量、有效思考数量以及当前使用的读取模式，例如 `full`、`full_project` 或分页 fallback。
+这是为了区分“仍在读取超长对话”和“界面已经卡死”。读取成功后会显示正文数量、有效思考数量以及当前使用的读取模式，例如 `full`、`full_project` 或分页 fallback。
 
 ## 传统 DOM / 增量抢救模式
 
@@ -116,7 +102,7 @@ Assistant
 
 API-first 是默认路线；传统 DOM 模式是救援路线，不需要普通用户每次都使用。
 
-## 安装
+## 安装与更新
 
 ### Edge
 
@@ -138,8 +124,20 @@ API-first 是默认路线；传统 DOM 模式是救援路线，不需要普通�
 实验分支当前面板版本应显示：
 
 ```text
-0.5.0
+0.5.1
 ```
+
+### 面板没有出现时
+
+v0.5.1 增加了一个**恢复 / 唤醒入口**。正常情况下刷新 ChatGPT 后面板会自动出现；如果重新加载扩展后，某个已经打开的 ChatGPT 标签页没有成功注入面板，可以在该标签页点击一次扩展图标。
+
+扩展图标只会检查并恢复当前 v0.5.x 运行链：
+
+```text
+content.js → api-data.js → ui-controller.js
+```
+
+它不会再调用旧实验版的双重注入逻辑。若面板已经完整存在，点击图标只会把它重新显示出来，不会重复重建。
 
 ## 隐私与数据流
 
@@ -168,7 +166,7 @@ API-first 读取使用当前浏览器里已经登录的 ChatGPT 会话，在 Cha
 - ChatGPT 内部 conversation 接口不是稳定的公开 API，可能变化。
 - 完整 endpoint 不可用时会尝试分页读取；分页 fallback 主要保证当前 path，不代表完整 branch tree。
 - 读取特别异常或极长的窗口时，后续仍可能需要更强的 directed / cursor fallback。
-- 当前主要面向文字正文和已展示思考摘要，不保证完整重建所有图片、附件、Canvas 或富媒体交互。
+- 当前主要面向文字正文和已展示思考摘要，不保证完整重建所有图片、附件或其他富媒体交互。
 - Raw JSON 可能包含敏感元数据，分享前必须人工检查。
 - 传统 DOM 模式仍会受到页面 DOM 改版影响。
 
@@ -177,14 +175,14 @@ API-first 读取使用当前浏览器里已经登录的 ChatGPT 会话，在 Cha
 当前实验架构的主要文件：
 
 ```text
-content.js          # 传统 DOM / 增量抢救核心
-api-background.js   # API 读取后台通道
+content.js          # 传统 DOM / 增量抢救核心，同时创建基础面板
+api-background.js   # API 读取后台通道 + 面板恢复入口
 api-data.js         # conversation / thoughts 解析与导出格式
 ui-controller.js    # 一次读取、多路导出与三块面板 UI
 style.css           # 面板样式
 ```
 
-旧实验脚本可能仍留在分支历史中，但 v0.5.0 manifest 不再把它们放进默认运行链。
+旧实验脚本可能仍留在分支历史中，但 v0.5.1 manifest 不再把它们放进默认运行链。
 
 ## 开发检查
 
