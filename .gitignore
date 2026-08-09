@@ -16,6 +16,16 @@ catchat-*.json
 *.md.tmp
 *.json.tmp
 
+# Local agent instructions / private coding context
+AGENTS.md
+CLAUDE.md
+**/AGENTS.md
+**/CLAUDE.md
+.agents/
+**/.agents/
+.claude/
+**/.claude/
+
 # ChatGPT official data exports
 chatgpt-data*/
 GPT-DATA*/
