@@ -1,0 +1,57 @@
+#catchat-rescuer-v030-panel .ccr-title > span {
+  font-size: 0 !important;
+}
+#catchat-rescuer-v030-panel .ccr-title > span::before {
+  content: "尾痕 | CatLog" !important;
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+  font-weight: 700 !important;
+}
+#catchat-rescuer-v030-panel .ccr-section-heading > .ccr-badge {
+  margin-left: auto !important;
+}
+#catchat-rescuer-v030-panel .ccr-section-heading > .ccr-section-toggle {
+  margin-left: auto !important;
+  flex: 0 0 auto !important;
+}
+#catchat-rescuer-v030-panel .ccr-section-heading > .ccr-badge + .ccr-section-toggle {
+  margin-left: 4px !important;
+}
+#catchat-rescuer-v030-panel .ccr-check {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  font-weight: 400 !important;
+  cursor: pointer !important;
+}
+#catchat-rescuer-v030-panel .ccr-check span {
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  font-weight: 400 !important;
+}
+#catchat-rescuer-v030-panel .ccr-check input[type="checkbox"] {
+  -webkit-appearance: checkbox !important;
+  appearance: auto !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  flex: 0 0 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  accent-color: #cdb9ff !important;
+}
+#catchat-rescuer-v030-panel .ccr-thinking-dev > summary {
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  font-weight: 600 !important;
+  color: rgba(247,243,251,.68) !important;
+}

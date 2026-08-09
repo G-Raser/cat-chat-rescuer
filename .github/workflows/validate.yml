@@ -21,8 +21,11 @@ jobs:
 
       - name: Check JavaScript syntax
         run: |
+          node --check boot-hide.js
           node --check content.js
-          node --check background.js
+          node --check api-background.js
+          node --check api-data.js
+          node --check ui-controller.js
 
       - name: Validate manifest JSON
         run: node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8')); console.log('manifest.json is valid')"

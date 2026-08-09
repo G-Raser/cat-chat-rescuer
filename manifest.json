@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "CatChat Rescuer",
-  "version": "0.4.2",
-  "description": "Locally capture and incrementally archive long ChatGPT conversations as Markdown and JSON.",
+  "name": "尾痕 | CatLog",
+  "version": "0.5.6",
+  "description": "Archive ChatGPT conversations and displayed thinking traces with API-first reading and legacy rescue tools.",
   "permissions": [
     "scripting",
     "activeTab"
@@ -12,10 +12,10 @@
     "https://chat.openai.com/*"
   ],
   "action": {
-    "default_title": "Open CatChat Rescuer"
+    "default_title": "Open 尾痕 | CatLog"
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "api-background.js"
   },
   "content_scripts": [
     {
@@ -24,10 +24,14 @@
         "https://chat.openai.com/*"
       ],
       "js": [
-        "content.js"
+        "boot-hide.js",
+        "content.js",
+        "api-data.js",
+        "ui-controller.js"
       ],
       "css": [
-        "style.css"
+        "style.css",
+        "ui-polish.css"
       ],
       "run_at": "document_idle"
     }

@@ -1,5 +1,118 @@
 # Changelog
 
+## v0.5.6-checkbox-and-branding
+
+Release-candidate polish and final naming pass before merging the API-first branch to main.
+
+### Fixed
+
+- Restores normal checkbox behavior for both `导出时间戳` controls after generic text-input CSS made them visually and functionally unreliable.
+- Keeps checkbox size, typography, and accent styling consistent without inheriting text-field padding/background/border rules.
+
+### Changed
+
+- Renames the public extension to **尾痕 | CatLog**.
+- Removes the visible experimental label from the main product branding.
+- Updates manifest metadata, README, privacy text, and panel branding for the new name.
+- Keeps the repository slug unchanged to avoid unnecessary link churn.
+
+## v0.5.5-thinking-timestamp-layout
+
+Small readable-export layout cleanup before release acceptance.
+
+### Changed
+
+- Moves thinking-turn timestamps from directly under the heading to the bottom of each turn's metadata.
+- Thinking Markdown now orders readable content as body → `Worked for ...` → model → time.
+- Thinking TXT also places time at the end of each turn instead of before the body.
+- Keeps the existing timestamp checkbox behavior and underlying `create_time` data unchanged.
+- Updates the validation workflow to syntax-check the current v0.5.x runtime files instead of the retired `background.js`.
+- README updated for v0.5.5.
+
+## v0.5.4-ui-typography-polish
+
+Small typography cleanup for the modern thinking panel.
+
+### Changed
+
+- Normalizes `开发诊断 / 完整原始轨迹` to the same secondary-control scale used elsewhere in the modern UI.
+- Sets the diagnostics summary to 11px text, 1.35 line height, and 600 weight so it no longer reads like a surprise section title.
+- Keeps this change isolated in `ui-polish.css`; reading, parsing, and export behavior are unchanged.
+- README updated for v0.5.4.
+
+## v0.5.3-ui-polish
+
+Small visual consistency pass for the modern API-first panel.
+
+### Changed
+
+- Aligns the version badge with the fold control on the right side of section headers instead of leaving the badge floating in the middle.
+- Normalizes both `导出时间戳` controls to the same font size, line height, checkbox size, and alignment.
+- Adds `ui-polish.css` after the base stylesheet so these adjustments stay isolated from reading/export logic.
+- README updated for v0.5.3 and the new polish stylesheet.
+
+## v0.5.2-export-options-and-ui-boot
+
+Improves the modern API-first UI startup and restores optional timestamps in readable exports.
+
+### Added
+
+- Adds `boot-hide.js` before the legacy DOM core so the old panel is hidden until the modern three-section UI is ready.
+- Adds an independent `导出时间戳` checkbox to the readable conversation export.
+- Adds an independent `导出时间戳` checkbox to thinking Markdown / TXT exports.
+- Timestamp preferences are stored in browser localStorage and default to enabled.
+- Readable timestamps use the API-provided `create_time` and are normalized to ISO strings; missing times are not fabricated.
+
+### Changed
+
+- The extension-icon recovery path now also injects `boot-hide.js` before `content.js`, preventing the old UI from flashing during recovery.
+- Modern UI marks the panel ready only after the replacement body and event handlers are mounted.
+- If modern mounting never succeeds, the old panel becomes visible after a 15-second fallback window instead of remaining permanently hidden.
+- README updated for v0.5.2, timestamp toggles, and the new startup sequence.
+
+## v0.5.1-panel-recovery-hotfix
+
+Hotfix for the v0.5.0 case where the extension remained installed but the entire in-page panel could fail to appear after an extension reload.
+
+### Added
+
+- Adds a single `chrome.action` recovery path owned by `api-background.js`.
+- Clicking the extension icon on a ChatGPT tab now restores the existing panel or injects the current v0.5.x runtime only: `content.js` → `api-data.js` → `ui-controller.js`.
+- Existing complete panels are only made visible again; they are not needlessly rebuilt.
+
+### Changed
+
+- Keeps declarative content-script loading as the normal path; the extension icon is a recovery / wake-up path, not a required first step.
+- Does not restore the old `background-loader.js` / split-thinking double-injection chain.
+- README installation and troubleshooting instructions now document the recovery behavior.
+
+## v0.5.0-api-first-unified-read
+
+Major experimental architecture update that turns the old DOM-only rescuer into an API-first conversation archiver with displayed-thinking export while retaining legacy rescue tools.
+
+### Added
+
+- Adds `api-background.js` for authenticated conversation reads through the current ChatGPT page session.
+- Adds `api-data.js` to normalize conversation trees, current paths, displayed `thoughts`, and `reasoning_recap` nodes.
+- Adds `ui-controller.js` with three user-facing sections: `读取内容`, `思考轨迹`, and `传统 DOM / 增量抢救工具`.
+- Adds one-read/multi-export behavior: readable Markdown, Raw JSON, and thinking exports share the same in-memory conversation cache.
+- Adds current-conversation and pasted `/c/...` link / conversation-ID reading through the same `读取内容` button.
+- Adds elapsed-time read status such as `⟳ 当前对话 读取中 · 12s`.
+- Adds displayed-thinking Markdown and plain-text exports with current-branch / whole-tree scope.
+- Adds developer-only complete thinking export and probe output.
+
+### Changed
+
+- Primary thinking counts and default thinking exports now include only turns with actual non-empty `thoughts` body content.
+- Pure `Worked for ...`, recap-only turns, and empty tool-summary turns no longer count as normal thinking turns.
+- Legacy DOM capture, State, and incremental scanning remain available as a fallback instead of being the primary export path.
+- README and privacy documentation were rewritten for the API-first data flow and sensitivity of Raw JSON / thinking exports.
+
+### Notes
+
+- The default thinking export is intended for user-visible / recoverable displayed-thinking summaries, not never-displayed hidden reasoning.
+- Full conversation-tree reads preserve branches when the full endpoint succeeds; pagination fallback mainly guarantees the current path.
+
 ## v0.4.2-session-incremental-scan
 
 Fixes the real full-window failure where incremental scan could be misled by the old local captured cache.
@@ -11,7 +124,7 @@ Fixes the real full-window failure where incremental scan could be misled by the
 - Exports only patch files and `.patch-only.rescue-state.json` when old full JSON is not loaded.
 - Checks that loaded old JSON message count matches the loaded State before generating `combined-full`.
 - Adds public installation, privacy, limitations, and file-usage documentation.
-- Adds `PRIVACY.md` and an MIT `LICENSE`.
+- Adds `PRIVACY.md`.
 - Adds a minimal GitHub Actions syntax and manifest validation workflow.
 
 ### Changed
@@ -41,7 +154,6 @@ Fixes the unsafe incremental behavior where a weak one-message anchor could be t
 - Tracks weak 1–2 message matches as weak matches only.
 - Keeps scanning when only weak matches are found.
 - Fails safely without exporting files if a stable anchor match is not found.
-- Adds `min_safe_anchor_match` metadata to rescue-state and incremental outputs.
 
 ### Notes
 
