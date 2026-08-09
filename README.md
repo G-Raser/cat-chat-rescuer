@@ -1,4 +1,4 @@
-# CatChat Rescuer v0.5.2
+# CatChat Rescuer v0.5.3
 
 CatChat Rescuer 是一个用于归档 ChatGPT 对话、保存已展示思考轨迹，并在必要时抢救超长对话的 Edge / Chrome 扩展。
 
@@ -125,6 +125,8 @@ boot-hide.js
 
 如果现代 UI 15 秒内仍未成功挂载，会放开旧面板作为故障兜底，而不是永久隐藏整个插件。
 
+v0.5.3 增加 `ui-polish.css`，统一两个时间戳勾选项的字号、行高和勾选框尺寸，并把版本 badge 与折叠按钮稳定排列在标题栏右侧。
+
 ### 面板没有出现时
 
 v0.5.1 起支持恢复 / 唤醒入口：如果重新加载扩展后，某个已打开的 ChatGPT 标签页没有成功出现面板，可以在该标签页点击一次扩展图标。
@@ -166,7 +168,7 @@ API-first 是默认路线；传统 DOM 模式是救援路线。
 实验分支当前面板版本应显示：
 
 ```text
-0.5.2
+0.5.3
 ```
 
 ## 隐私与数据流
@@ -209,10 +211,11 @@ content.js          # 传统 DOM / 增量抢救核心，同时创建基础面板
 api-background.js   # API 读取后台通道 + 面板恢复入口
 api-data.js         # conversation / thoughts 解析、时间戳与导出格式
 ui-controller.js    # 一次读取、多路导出、导出选项与三块面板 UI
-style.css           # 面板样式
+style.css           # 面板基础样式
+ui-polish.css       # v0.5.3 现代 UI 对齐与字号修正
 ```
 
-旧实验脚本可能仍留在分支历史中，但 v0.5.2 manifest 不再把它们放进默认运行链。
+旧实验脚本可能仍留在分支历史中，但 v0.5.3 manifest 不再把它们放进默认运行链。
 
 ## 开发检查
 
