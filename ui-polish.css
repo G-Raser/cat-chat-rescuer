@@ -1,0 +1,30 @@
+#catchat-rescuer-v030-panel .ccr-section-heading > .ccr-badge {
+  margin-left: auto !important;
+}
+#catchat-rescuer-v030-panel .ccr-section-heading > .ccr-section-toggle {
+  margin-left: auto !important;
+  flex: 0 0 auto !important;
+}
+#catchat-rescuer-v030-panel .ccr-section-heading > .ccr-badge + .ccr-section-toggle {
+  margin-left: 4px !important;
+}
+#catchat-rescuer-v030-panel .ccr-check {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  font-weight: 400 !important;
+}
+#catchat-rescuer-v030-panel .ccr-check span {
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  font-weight: 400 !important;
+}
+#catchat-rescuer-v030-panel .ccr-check input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  flex: 0 0 16px !important;
+  margin: 0 !important;
+}
