@@ -10,6 +10,7 @@ Small readable-export layout cleanup before release acceptance.
 - Thinking Markdown now orders readable content as body → `Worked for ...` → model → time.
 - Thinking TXT also places time at the end of each turn instead of before the body.
 - Keeps the existing timestamp checkbox behavior and underlying `create_time` data unchanged.
+- Updates the validation workflow to syntax-check the current v0.5.x runtime files instead of the retired `background.js`.
 - README updated for v0.5.5.
 
 ## v0.5.4-ui-typography-polish
@@ -107,7 +108,7 @@ Fixes the real full-window failure where incremental scan could be misled by the
 - Exports only patch files and `.patch-only.rescue-state.json` when old full JSON is not loaded.
 - Checks that loaded old JSON message count matches the loaded State before generating `combined-full`.
 - Adds public installation, privacy, limitations, and file-usage documentation.
-- Adds `PRIVACY.md` and an MIT `LICENSE`.
+- Adds `PRIVACY.md`.
 - Adds a minimal GitHub Actions syntax and manifest validation workflow.
 
 ### Changed
