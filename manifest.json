@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "CatChat Rescuer",
+  "name": "尾痕 | CatLog",
   "version": "0.5.6",
-  "description": "Archive ChatGPT conversations and displayed thinking traces, with API-first reading and legacy rescue tools.",
+  "description": "Archive ChatGPT conversations and displayed thinking traces with API-first reading and legacy rescue tools.",
   "permissions": [
     "scripting",
     "activeTab"
@@ -12,7 +12,7 @@
     "https://chat.openai.com/*"
   ],
   "action": {
-    "default_title": "Open CatChat Rescuer"
+    "default_title": "Open 尾痕 | CatLog"
   },
   "background": {
     "service_worker": "api-background.js"
