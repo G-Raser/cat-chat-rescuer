@@ -1,14 +1,19 @@
-# 尾痕 | CatLog v0.5.6
+# 尾痕 | CatLog
 
-**尾痕 | CatLog** 是一个用于归档 ChatGPT 对话、保存已展示思考轨迹，并在必要时抢救超长对话的 Edge / Chrome 扩展。
+**尾痕 | CatLog** 是一套用于归档 ChatGPT 对话、保存已展示思考轨迹，并在必要时抢救超长对话的本地工具。
 
-当前版本采用 **API-first** 架构：优先直接读取当前 ChatGPT 会话可访问的 conversation JSON；旧版 DOM / 增量扫描工具仍保留为救援模式。
+当前公开版本分为两条发行线：
+
+- **Extension v0.5.6**：Edge / Chrome 桌面扩展，完整 API-first 归档、思考轨迹导出与传统 DOM / 增量抢救。
+- **Mobile userscript v0.1.0**：轻量手机脚本，已在 Firefox Android + Tampermonkey 实机测试，可直接导出当前对话、当前分支思考轨迹和 Raw JSON。
+
+桌面扩展采用 **API-first** 架构：优先直接读取当前 ChatGPT 会话可访问的 conversation JSON；旧版 DOM / 增量扫描工具仍保留为救援模式。Mobile userscript 复用同一类 API-first 思路，但刻意保持轻量。
 
 > 非官方工具，与 OpenAI 无关联。它依赖 ChatGPT 当前网页和内部接口行为，因此页面或接口变化可能导致部分功能暂时失效。
 
 ## 当前结构
 
-面板分为三部分：
+桌面扩展面板分为三部分：
 
 1. **读取内容**：统一读取一次 conversation JSON。
 2. **思考轨迹**：使用同一份已读取缓存导出 ChatGPT 已展示 / 可恢复的 `thoughts` 内容。
@@ -158,19 +163,38 @@ API-first 是默认路线；传统 DOM 模式是救援路线。
 3. 点击“加载已解压缩的扩展程序”并选择本仓库文件夹。
 4. 更新代码后重新加载扩展并刷新 ChatGPT。
 
-当前面板版本应显示：
+当前桌面面板版本应显示：
 
 ```text
 0.5.6
 ```
 
+### Mobile / Firefox Android
+
+Mobile v0.1.0 位于 [`userscript/`](userscript/README.md)。
+
+已实测的最短安装路径：Firefox Android + Tampermonkey → 安装 [`catlog-mobile.user.js`](userscript/catlog-mobile.user.js) → 打开具体 ChatGPT 对话并刷新。
+
+Mobile 当前提供：
+
+- `读取当前对话`
+- `聊天 MD`
+- `思考 MD`
+- `Raw JSON`
+- 时间戳开关
+- 可选的人类名 / AI名
+
+称呼输入框默认保持空白：如果不填写，导出自动使用 `User / Assistant`；填写后才使用自定义称呼。
+
+Mobile 和桌面 Extension **独立版本化**，不要求两个版本号同步。
+
 ## 隐私与数据流
 
-扩展不需要用户手动填写 OpenAI API key。
+Extension 和 Mobile userscript 都不需要用户手动填写 OpenAI API key。
 
-API-first 读取使用当前浏览器里已经登录的 ChatGPT 会话，在 ChatGPT 页面上下文中请求该账号本来可访问的对话数据。会话 access token / account 信息只用于运行时请求，不写入导出文件，也不由扩展持久化保存。
+API-first 读取使用当前浏览器里已经登录的 ChatGPT 会话，在 ChatGPT 页面上下文中请求该账号本来可访问的对话数据。会话 access token / account 信息只用于运行时请求，不写入导出文件，也不由工具持久化保存。
 
-扩展本身不会把聊天内容主动发送到第三方服务器；导出文件通过浏览器直接保存到本机。
+工具本身不会把聊天内容主动发送到额外的第三方归档服务器；导出文件通过浏览器直接保存到本机。
 
 所有导出都应视为私密数据，尤其包括：
 
@@ -195,6 +219,7 @@ API-first 读取使用当前浏览器里已经登录的 ChatGPT 会话，在 Cha
 - Raw JSON 可能包含敏感元数据，分享前必须人工检查。
 - 传统 DOM 模式仍会受到页面 DOM 改版影响。
 - API 中缺失 `create_time` 的条目不会伪造时间戳。
+- Mobile v0.1.0 当前只做当前对话 / 当前分支轻量导出，不包含桌面版完整救援工具。
 
 ## 文件与模块
 
@@ -206,6 +231,7 @@ api-data.js         # conversation / thoughts 解析、时间戳与导出格式
 ui-controller.js    # 一次读取、多路导出、导出选项与三块面板 UI
 style.css           # 面板基础样式
 ui-polish.css       # 现代 UI 对齐、字号与 checkbox 修正
+userscript/         # CatLog Mobile userscript、独立说明与 changelog
 ```
 
 早期试验脚本仍可从 Git 历史中回看，但当前 manifest 不再把它们放进默认运行链。
@@ -220,6 +246,7 @@ node --check content.js
 node --check api-background.js
 node --check api-data.js
 node --check ui-controller.js
+node --check userscript/catlog-mobile.user.js
 ```
 
 并解析检查 `manifest.json`。
