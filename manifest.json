@@ -27,11 +27,13 @@
         "boot-hide.js",
         "content.js",
         "api-data.js",
-        "ui-controller.js"
+        "ui-controller.js",
+        "panel-mobility.js"
       ],
       "css": [
         "style.css",
-        "ui-polish.css"
+        "ui-polish.css",
+        "panel-mobility.css"
       ],
       "run_at": "document_idle"
     }
