@@ -12,6 +12,12 @@
   let edgeTab = null;
   let drag = null;
   let suppressClick = false;
+  function savedTop() {
+    const raw = localStorage.getItem(TOP_KEY);
+    if (raw == null || raw === "") return null;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : null;
+  }
   function clampTop(value) {
     if (!panel) return EDGE_GAP;
     const height = Math.min(panel.offsetHeight || 44, Math.max(44, window.innerHeight - EDGE_GAP * 2));
@@ -20,14 +26,15 @@
   }
   function applyTop(value, persist = false) {
     if (!panel) return;
-    const top = clampTop(Number(value) || EDGE_GAP);
+    const numeric = Number(value);
+    const top = clampTop(Number.isFinite(numeric) ? numeric : EDGE_GAP);
     panel.style.setProperty("top", `${Math.round(top)}px`, "important");
     panel.style.setProperty("bottom", "auto", "important");
     if (persist) localStorage.setItem(TOP_KEY, String(Math.round(top)));
   }
   function restoreTop() {
-    const saved = Number(localStorage.getItem(TOP_KEY));
-    if (Number.isFinite(saved)) applyTop(saved, false);
+    const saved = savedTop();
+    if (saved != null) applyTop(saved, false);
   }
   function syncCollapsedUi() {
     if (!panel || !edgeTab) return;
@@ -37,8 +44,8 @@
     const hide = q("#ccr-hide", panel);
     if (hide && !collapsed) hide.textContent = "−";
     requestAnimationFrame(() => {
-      const saved = Number(localStorage.getItem(TOP_KEY));
-      if (Number.isFinite(saved)) applyTop(saved, false);
+      const saved = savedTop();
+      if (saved != null) applyTop(saved, false);
     });
   }
   function beginDrag(e, handle) {
@@ -123,7 +130,7 @@
   setTimeout(() => clearInterval(timer), 20000);
   window.addEventListener("resize", () => {
     if (!panel) return;
-    const saved = Number(localStorage.getItem(TOP_KEY));
-    if (Number.isFinite(saved)) applyTop(saved, true);
+    const saved = savedTop();
+    if (saved != null) applyTop(saved, true);
   });
 })();
