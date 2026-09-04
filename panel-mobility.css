@@ -1,0 +1,53 @@
+#catchat-rescuer-v030-panel .ccr-title {
+  cursor: ns-resize !important;
+  touch-action: none !important;
+}
+#catchat-rescuer-v030-panel .ccr-title button,
+#catchat-rescuer-v030-panel .ccr-title input,
+#catchat-rescuer-v030-panel .ccr-title select,
+#catchat-rescuer-v030-panel .ccr-title a {
+  cursor: pointer !important;
+}
+#catchat-rescuer-v030-panel.ccr-dragging {
+  transition: none !important;
+  user-select: none !important;
+}
+#catchat-rescuer-v030-panel .ccr-edge-tab {
+  display: none !important;
+}
+#catchat-rescuer-v030-panel.ccr-collapsed {
+  right: 0 !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  max-height: 44px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-right: 0 !important;
+  border-radius: 14px 0 0 14px !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,.28) !important;
+}
+#catchat-rescuer-v030-panel.ccr-collapsed .ccr-title,
+#catchat-rescuer-v030-panel.ccr-collapsed .ccr-body {
+  display: none !important;
+}
+#catchat-rescuer-v030-panel.ccr-collapsed .ccr-edge-tab {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 44px !important;
+  height: 44px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 14px 0 0 14px !important;
+  background: rgba(38, 34, 46, .96) !important;
+  color: #f7f3fb !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  cursor: ns-resize !important;
+  touch-action: none !important;
+}
+#catchat-rescuer-v030-panel.ccr-collapsed .ccr-edge-tab:hover {
+  filter: brightness(1.08) !important;
+}
