@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         尾痕 | CatLog Mobile
 // @namespace    https://github.com/G-Raser/cat-chat-rescuer
-// @version      0.1.0
+// @version      0.1.1
 // @description  Lightweight mobile userscript for exporting the current ChatGPT conversation, displayed thinking traces, or raw JSON.
 // @match        https://chatgpt.com/*
 // @match        https://chat.openai.com/*
@@ -19,6 +19,11 @@
   const TYPES = new Set(["thoughts", "reasoning_recap"]);
   const pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
   const pageFetch = pageWindow.fetch.bind(pageWindow);
+  const USER_LABEL_KEY = "catlog-mobile-user-label";
+  const ASSISTANT_LABEL_KEY = "catlog-mobile-assistant-label";
+  const POSITION_KEY = "catlog-mobile-anchor-y";
+  const EDGE_GAP = 8;
+  const DRAG_THRESHOLD = 5;
   let raw = null, data = null, timer = null, started = 0;
 
   const currentId = () => location.pathname.match(/\/c\/([^/?#]+)/)?.[1]
@@ -225,8 +230,6 @@
     });
     return md;
   }
-  const USER_LABEL_KEY = "catlog-mobile-user-label";
-  const ASSISTANT_LABEL_KEY = "catlog-mobile-assistant-label";
   function exportLabels() {
     return {
       user: localStorage.getItem(USER_LABEL_KEY)?.trim() || "User",
@@ -250,19 +253,84 @@
     } catch (e) { stopTimer(); raw = data = null; enable(false); status(`读取失败：${e?.message || e}`, true); }
   }
 
+  function storedAnchor() {
+    const rawValue = localStorage.getItem(POSITION_KEY);
+    if (rawValue == null || rawValue === "") return null;
+    const value = Number(rawValue);
+    return Number.isFinite(value) ? value : null;
+  }
+  function clampAnchor(value) {
+    return Math.min(Math.max(44, value), Math.max(44, window.innerHeight - 44));
+  }
+  function clampTop(value, height) {
+    const max = Math.max(EDGE_GAP, window.innerHeight - Math.max(44, height) - EDGE_GAP);
+    return Math.min(Math.max(EDGE_GAP, value), max);
+  }
+  function placeUi(launcher, panel, anchorValue, persist = false) {
+    const anchor = clampAnchor(Number.isFinite(Number(anchorValue)) ? Number(anchorValue) : window.innerHeight * 0.5);
+    const launcherHeight = launcher.offsetHeight || 62;
+    launcher.style.top = `${Math.round(clampTop(anchor - launcherHeight / 2, launcherHeight))}px`;
+    launcher.style.bottom = "auto";
+    if (!panel.hidden) {
+      const panelHeight = panel.offsetHeight || Math.min(window.innerHeight * 0.72, 560);
+      panel.style.top = `${Math.round(clampTop(anchor - panelHeight / 2, panelHeight))}px`;
+      panel.style.bottom = "auto";
+      panel.style.transform = "none";
+    }
+    if (persist) localStorage.setItem(POSITION_KEY, String(Math.round(anchor)));
+    return anchor;
+  }
+  function bindVerticalDrag(handle, launcher, panel, getAnchor, setAnchor, ignoreInteractive = false) {
+    let drag = null, suppressClick = false;
+    handle.addEventListener("pointerdown", (e) => {
+      if (e.button > 0) return;
+      if (ignoreInteractive && e.target.closest("button,input,select,a,label,details,summary")) return;
+      drag = { id: e.pointerId, startY: e.clientY, startAnchor: getAnchor(), moved: false };
+      handle.setPointerCapture?.(e.pointerId);
+    });
+    handle.addEventListener("pointermove", (e) => {
+      if (!drag || drag.id !== e.pointerId) return;
+      const delta = e.clientY - drag.startY;
+      if (!drag.moved && Math.abs(delta) < DRAG_THRESHOLD) return;
+      drag.moved = true;
+      e.preventDefault();
+      setAnchor(drag.startAnchor + delta, false);
+    }, { passive: false });
+    const finish = (e) => {
+      if (!drag || drag.id !== e.pointerId) return;
+      const moved = drag.moved;
+      handle.releasePointerCapture?.(e.pointerId);
+      drag = null;
+      if (moved) {
+        setAnchor(getAnchor(), true);
+        suppressClick = true;
+        setTimeout(() => { suppressClick = false; }, 0);
+      }
+    };
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+    handle.addEventListener("click", (e) => {
+      if (!suppressClick) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+  }
+
   function mount() {
     if (document.getElementById("catlog-mobile-launcher")) return;
     const style = document.createElement("style");
     style.textContent = `
 #catlog-mobile-launcher{
-  position:fixed;right:-8px;bottom:calc(max(18px,env(safe-area-inset-bottom)) + 108px);
+  position:fixed;right:-8px;top:50%;bottom:auto;
   z-index:2147483647;width:38px;height:62px;border:1px solid rgba(205,185,255,.45);
   border-radius:12px 0 0 12px;padding:0 10px 0 5px;color:#f7f3fb;
   background:rgba(27,22,38,.92);box-shadow:0 8px 24px rgba(0,0,0,.32);
-  font:650 12px/1.05 system-ui,sans-serif;writing-mode:vertical-rl;letter-spacing:1px
+  font:650 12px/1.05 system-ui,sans-serif;writing-mode:vertical-rl;letter-spacing:1px;
+  touch-action:none;cursor:ns-resize
 }
+#catlog-mobile-launcher[hidden]{display:none!important}
 #catlog-mobile-panel{
-  position:fixed;right:8px;top:50%;transform:translateY(-50%);z-index:2147483647;
+  position:fixed;right:8px;top:50%;bottom:auto;transform:none;z-index:2147483647;
   width:min(286px,calc(100vw - 42px));max-height:min(72dvh,560px);overflow:auto;
   padding:12px;border:1px solid rgba(205,185,255,.28);border-radius:15px;color:#f7f3fb;
   background:rgba(20,16,29,.96);box-shadow:0 18px 48px rgba(0,0,0,.45);
@@ -270,8 +338,11 @@
 }
 #catlog-mobile-panel[hidden]{display:none!important}
 #catlog-mobile-panel *{box-sizing:border-box}
-.catlog-mobile-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+.catlog-mobile-head{display:flex;align-items:center;gap:8px;margin-bottom:9px;touch-action:none;cursor:ns-resize}
+.catlog-mobile-head-main{min-width:0;margin-right:auto}.catlog-mobile-head-actions{display:flex;gap:5px;flex:0 0 auto}
 .catlog-mobile-title{font-weight:750}.catlog-mobile-version{color:#aa9fba;font-size:10px}
+#catlog-mobile-panel .catlog-mobile-head-actions button{width:32px;min-height:32px;padding:0;border-radius:999px;font-size:17px;line-height:1}
+#catlog-mobile-hide{background:rgba(255,255,255,.045)!important;color:#d8cfdf!important}
 .catlog-mobile-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.catlog-mobile-grid .wide{grid-column:1/-1}
 #catlog-mobile-panel button{min-height:38px;border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:8px 9px;color:#f7f3fb;background:rgba(255,255,255,.06);font:inherit}
 #catlog-mobile-panel button:disabled{opacity:.4}
@@ -283,14 +354,53 @@
 .catlog-mobile-label-grid label{display:grid;gap:4px;color:#aaa0b8;font-size:10px}
 .catlog-mobile-label-grid input{width:100%;min-width:0;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:7px 8px;background:rgba(0,0,0,.18);color:#f7f3fb;font:12px/1.2 system-ui,sans-serif}
 .catlog-mobile-label-grid button{grid-column:1/-1;min-height:34px!important;font-size:11px!important}
-#catlog-mobile-status{min-height:36px;margin-top:9px;padding:7px 8px;border-radius:9px;background:rgba(0,0,0,.18);color:#d7cced;overflow-wrap:anywhere;font-size:11px}`
+#catlog-mobile-status{min-height:36px;margin-top:9px;padding:7px 8px;border-radius:9px;background:rgba(0,0,0,.18);color:#d7cced;overflow-wrap:anywhere;font-size:11px}`;
     document.documentElement.appendChild(style);
-    const launcher = document.createElement("button"); launcher.id = "catlog-mobile-launcher"; launcher.type = "button"; launcher.textContent = "尾痕"; document.documentElement.appendChild(launcher);
-    const panel = document.createElement("section"); panel.id = "catlog-mobile-panel"; panel.hidden = true;
-    panel.innerHTML = `<div class="catlog-mobile-head"><div><div class="catlog-mobile-title">尾痕 | CatLog Mobile</div><div class="catlog-mobile-version">0.1.0 · 当前对话</div></div><button id="catlog-mobile-close" type="button">×</button></div><div class="catlog-mobile-grid"><button class="wide" id="catlog-mobile-read" type="button">读取当前对话</button><button id="catlog-mobile-chat-md" type="button" disabled>聊天 MD</button><button id="catlog-mobile-thinking-md" type="button" disabled>思考 MD</button><button class="wide" id="catlog-mobile-raw" type="button" disabled>Raw JSON</button></div><label class="catlog-mobile-option"><input id="catlog-mobile-timestamps" type="checkbox" checked><span>导出时间戳</span></label><details class="catlog-mobile-labels"><summary>导出称呼</summary><div class="catlog-mobile-label-grid"><label><span>人类名</span><input id="catlog-mobile-user-label" maxlength="40" placeholder="User"></label><label><span>AI名</span><input id="catlog-mobile-assistant-label" maxlength="40" placeholder="Assistant"></label><button id="catlog-mobile-label-reset" type="button">恢复 User / Assistant</button></div></details><div id="catlog-mobile-status">尚未读取</div>`;
+
+    const launcher = document.createElement("button");
+    launcher.id = "catlog-mobile-launcher";
+    launcher.type = "button";
+    launcher.textContent = "尾痕";
+    launcher.title = "打开 CatLog；上下拖动可移动";
+    document.documentElement.appendChild(launcher);
+
+    const panel = document.createElement("section");
+    panel.id = "catlog-mobile-panel";
+    panel.hidden = true;
+    panel.innerHTML = `<div class="catlog-mobile-head"><div class="catlog-mobile-head-main"><div class="catlog-mobile-title">尾痕 | CatLog Mobile</div><div class="catlog-mobile-version">0.1.1 · 当前对话</div></div><div class="catlog-mobile-head-actions"><button id="catlog-mobile-collapse" type="button" title="缩到右边" aria-label="缩到右边">−</button><button id="catlog-mobile-hide" type="button" title="本页隐藏；下次进入会自动显示" aria-label="本页隐藏；下次进入会自动显示">×</button></div></div><div class="catlog-mobile-grid"><button class="wide" id="catlog-mobile-read" type="button">读取当前对话</button><button id="catlog-mobile-chat-md" type="button" disabled>聊天 MD</button><button id="catlog-mobile-thinking-md" type="button" disabled>思考 MD</button><button class="wide" id="catlog-mobile-raw" type="button" disabled>Raw JSON</button></div><label class="catlog-mobile-option"><input id="catlog-mobile-timestamps" type="checkbox" checked><span>导出时间戳</span></label><details class="catlog-mobile-labels"><summary>导出称呼</summary><div class="catlog-mobile-label-grid"><label><span>人类名</span><input id="catlog-mobile-user-label" maxlength="40" placeholder="User"></label><label><span>AI名</span><input id="catlog-mobile-assistant-label" maxlength="40" placeholder="Assistant"></label><button id="catlog-mobile-label-reset" type="button">恢复 User / Assistant</button></div></details><div id="catlog-mobile-status">尚未读取</div>`;
     document.documentElement.appendChild(panel);
-    launcher.onclick = () => { panel.hidden = !panel.hidden; };
-    panel.querySelector("#catlog-mobile-close").onclick = () => { panel.hidden = true; };
+
+    let anchor = storedAnchor() ?? window.innerHeight * 0.5;
+    const setAnchor = (value, persist = false) => {
+      anchor = placeUi(launcher, panel, value, persist);
+    };
+    const openPanel = () => {
+      panel.hidden = false;
+      launcher.hidden = true;
+      requestAnimationFrame(() => setAnchor(anchor, false));
+    };
+    const collapsePanel = () => {
+      panel.hidden = true;
+      launcher.hidden = false;
+      requestAnimationFrame(() => setAnchor(anchor, false));
+    };
+    const hideForPage = () => {
+      panel.hidden = true;
+      launcher.hidden = true;
+    };
+
+    launcher.addEventListener("click", openPanel);
+    panel.querySelector("#catlog-mobile-collapse").addEventListener("click", (e) => { e.stopPropagation(); collapsePanel(); });
+    panel.querySelector("#catlog-mobile-hide").addEventListener("click", (e) => { e.stopPropagation(); hideForPage(); });
+    bindVerticalDrag(launcher, launcher, panel, () => anchor, setAnchor, false);
+    bindVerticalDrag(panel.querySelector(".catlog-mobile-head"), launcher, panel, () => anchor, setAnchor, true);
+    setAnchor(anchor, false);
+
+    window.addEventListener("resize", () => {
+      if (launcher.hidden && panel.hidden) return;
+      requestAnimationFrame(() => setAnchor(anchor, true));
+    });
+
     panel.querySelector("#catlog-mobile-read").onclick = read;
     const userLabelInput = panel.querySelector("#catlog-mobile-user-label");
     const assistantLabelInput = panel.querySelector("#catlog-mobile-assistant-label");
