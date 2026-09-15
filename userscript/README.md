@@ -1,8 +1,8 @@
-# 尾痕 | CatLog Mobile v0.1.0
+# 尾痕 | CatLog Mobile v0.1.1
 
 这是 **尾痕 | CatLog** 的轻量移动端 userscript，主要用于 Firefox Android + Tampermonkey 场景。
 
-> 已在 Firefox Android + Tampermonkey 实机测试：当前对话 API 读取、聊天 Markdown、思考轨迹 Markdown、Raw JSON 下载均可用。
+> 已在 Firefox Android + Tampermonkey 实机测试过 v0.1.0 的核心读取 / 导出能力；v0.1.1 主要增加浮窗移动、缩边和本页隐藏交互。
 
 ## 当前功能
 
@@ -18,6 +18,10 @@
   - 填入自定义称呼后使用自定义值
   - 自定义值保存在浏览器本地
 - 右侧边缘小把手，尽量避开 ChatGPT 手机页面输入区
+- 小把手和展开面板都支持上下拖动
+- `−`：把展开面板缩回右侧边缘
+- `×`：仅在当前页面隐藏 CatLog；刷新或下次进入时重新出现
+- 垂直位置保存在浏览器本地，窗口尺寸变化后会限制在可触达范围内
 
 ## 安装
 
@@ -32,7 +36,16 @@
 5. 页面右侧应出现 `尾痕` 小把手。
 6. 点开后先按 `读取当前对话`，读取成功后再导出需要的文件。
 
-脚本 metadata 已设置 GitHub Raw `@updateURL` / `@downloadURL`。后续版本更新时将继续使用同一路径。
+脚本 metadata 已设置 GitHub Raw `@updateURL` / `@downloadURL`。v0.1.1 已提升 `@version`，Tampermonkey 可按正常 userscript 更新流程识别新版本。
+
+## 浮窗交互
+
+- 拖动右侧 `尾痕` 小把手：上下移动收起状态的位置。
+- 点小把手：展开完整面板。
+- 拖动面板标题栏空白处：上下移动展开面板。
+- 点 `−`：缩回右侧小把手，不会关闭 CatLog。
+- 点 `×`：当前页面彻底隐藏面板和小把手；这个隐藏状态不会持久化，刷新页面或下次重新进入 ChatGPT 时 CatLog 会重新出现。
+- 上下位置会持久化，因此重新出现后仍会尽量待在你上次放的位置附近。
 
 ## 和桌面扩展的关系
 
@@ -43,7 +56,7 @@ Mobile userscript 是轻量 companion，不替代桌面 Extension。
 版本独立维护：
 
 - Extension：当前正式版 v0.5.6
-- Mobile userscript：当前正式版 v0.1.0
+- Mobile userscript：当前正式版 v0.1.1
 
 ## 隐私
 
