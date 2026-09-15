@@ -48,8 +48,32 @@
       if (saved != null) applyTop(saved, false);
     });
   }
+  function temporarilyHide() {
+    if (!panel) return;
+    panel.classList.remove("ccr-collapsed");
+    localStorage.setItem(COLLAPSE_KEY, "0");
+    panel.dataset.ccrTemporarilyHidden = "1";
+    panel.style.setProperty("display", "none", "important");
+  }
+  function installCloseButton() {
+    if (!panel || !title || q("#ccr-panel-close", panel)) return;
+    const close = document.createElement("button");
+    close.id = "ccr-panel-close";
+    close.type = "button";
+    close.textContent = "×";
+    close.title = "本页隐藏 CatLog；下次进入会自动显示";
+    close.setAttribute("aria-label", "本页隐藏 CatLog；下次进入会自动显示");
+    close.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      temporarilyHide();
+    });
+    const collapse = q("#ccr-hide", title);
+    if (collapse) title.insertBefore(close, collapse);
+    else title.appendChild(close);
+  }
   function beginDrag(e, handle) {
-    if (!panel || e.button > 0) return;
+    if (!panel || e.button > 0 || panel.style.display === "none") return;
     if (handle === title && e.target.closest("button,input,select,a,label,details,summary")) return;
     const rect = panel.getBoundingClientRect();
     drag = { pointerId: e.pointerId, startY: e.clientY, startTop: rect.top, moved: false, handle };
@@ -97,6 +121,7 @@
     if (!panel) return false;
     title = q(".ccr-title", panel);
     if (!title) return false;
+    installCloseButton();
     edgeTab = q(".ccr-edge-tab", panel);
     if (!edgeTab) {
       edgeTab = document.createElement("button");
@@ -129,7 +154,7 @@
   }, 250);
   setTimeout(() => clearInterval(timer), 20000);
   window.addEventListener("resize", () => {
-    if (!panel) return;
+    if (!panel || panel.style.display === "none") return;
     const saved = savedTop();
     if (saved != null) applyTop(saved, true);
   });
