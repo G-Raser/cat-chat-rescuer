@@ -1,12 +1,33 @@
 #catchat-rescuer-v030-panel .ccr-title {
+  justify-content: flex-start !important;
   cursor: ns-resize !important;
   touch-action: none !important;
+}
+#catchat-rescuer-v030-panel .ccr-title > span:first-child {
+  min-width: 0 !important;
+  margin-right: auto !important;
 }
 #catchat-rescuer-v030-panel .ccr-title button,
 #catchat-rescuer-v030-panel .ccr-title input,
 #catchat-rescuer-v030-panel .ccr-title select,
 #catchat-rescuer-v030-panel .ccr-title a {
   cursor: pointer !important;
+}
+#catchat-rescuer-v030-panel #ccr-panel-close {
+  flex: 0 0 auto !important;
+  width: 26px !important;
+  height: 26px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  color: rgba(247,243,251,.82) !important;
+  background: rgba(255,255,255,.07) !important;
+  font-size: 17px !important;
+  line-height: 1 !important;
+}
+#catchat-rescuer-v030-panel #ccr-panel-close:hover {
+  color: #fff !important;
+  background: rgba(255,130,150,.16) !important;
+  filter: none !important;
 }
 #catchat-rescuer-v030-panel.ccr-dragging {
   transition: none !important;
