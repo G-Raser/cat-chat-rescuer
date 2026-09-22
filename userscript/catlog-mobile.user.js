@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         尾痕 | CatLog Mobile
 // @namespace    https://github.com/G-Raser/cat-chat-rescuer
-// @version      0.1.1
+// @version      0.1.2
 // @description  Lightweight mobile userscript for exporting the current ChatGPT conversation, displayed thinking traces, or raw JSON.
 // @match        https://chatgpt.com/*
 // @match        https://chat.openai.com/*
@@ -137,9 +137,9 @@
     for (const k of ["text", "content", "summary", "result", "code"]) { const t = textValue(c[k]).trim(); if (t) out.push(t); }
     return [...new Set(out)].join("\n\n").trim();
   }
-  function currentPath(conversation) {
-    const mapping = conversation?.mapping; let id = conversation?.current_node;
-    if (!mapping || !id || !mapping[id]) throw new Error("API JSON 缺少 mapping/current_node");
+  function pathToNode(conversation, targetId) {
+    const mapping = conversation?.mapping; let id = targetId;
+    if (!mapping || !id || !mapping[id]) throw new Error("API JSON 缺少 mapping/目标节点");
     const rev = [], seen = new Set();
     while (id != null) {
       if (seen.has(id)) throw new Error("API 对话树出现循环");
@@ -147,6 +147,57 @@
       seen.add(id); rev.push(id); id = node.parent;
     }
     return rev.reverse();
+  }
+  function currentPath(conversation) { return pathToNode(conversation, conversation?.current_node); }
+  function visibleMessage(nodeId, node) {
+    const message = node?.message; if (!message) return null;
+    const role = message.author?.role, type = message.content?.content_type || "unknown";
+    if (!["user", "assistant"].includes(role) || TYPES.has(type) || message.metadata?.is_visually_hidden_from_conversation) return null;
+    const text = textContent(message.content);
+    return text ? { nodeId, role, text, createTime: message.create_time ?? null } : null;
+  }
+  function visibleMessagesForPath(conversation, path) {
+    const mapping = conversation?.mapping || {};
+    return path.map(nodeId => visibleMessage(nodeId, mapping[nodeId])).filter(Boolean);
+  }
+  function shortPreview(value, max = 32) {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  }
+  function timeValue(value) {
+    const n = Number(value); if (Number.isFinite(n)) return n;
+    const parsed = Date.parse(value); return Number.isFinite(parsed) ? parsed : 0;
+  }
+  function conversationBranches(conversation, currentPathIds) {
+    const mapping = conversation?.mapping || {}, currentNode = conversation?.current_node;
+    const currentMessages = visibleMessagesForPath(conversation, currentPathIds);
+    const currentKey = currentMessages.map(m => m.nodeId).join("|");
+    const leaves = Object.entries(mapping).filter(([, node]) => {
+      const children = Array.isArray(node?.children) ? node.children.filter(id => mapping[id]) : [];
+      return children.length === 0;
+    }).map(([nodeId]) => nodeId);
+    const candidates = currentNode ? [currentNode, ...leaves.filter(id => id !== currentNode)] : leaves;
+    const seen = new Set(), branches = [];
+    for (const nodeId of candidates) {
+      let path; try { path = pathToNode(conversation, nodeId); } catch { continue; }
+      const messages = visibleMessagesForPath(conversation, path), key = messages.map(m => m.nodeId).join("|");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      let divergenceIndex = 0;
+      while (divergenceIndex < messages.length && divergenceIndex < currentMessages.length && messages[divergenceIndex].nodeId === currentMessages[divergenceIndex].nodeId) divergenceIndex += 1;
+      const divergence = messages[divergenceIndex] || null, last = messages.at(-1) || null;
+      branches.push({
+        id: nodeId,
+        current: key === currentKey,
+        messages,
+        messageCount: messages.length,
+        divergenceIndex,
+        divergencePreview: shortPreview(divergence?.text),
+        lastPreview: shortPreview(last?.text),
+        lastTime: last?.createTime ?? null
+      });
+    }
+    return branches.sort((a, b) => Number(b.current) - Number(a.current) || timeValue(b.lastTime) - timeValue(a.lastTime));
   }
   function thoughtEntries(content) {
     if (!Array.isArray(content?.thoughts)) return [];
@@ -178,23 +229,19 @@
     return turns.sort((a, b) => (a.createTime ?? 0) - (b.createTime ?? 0));
   }
   function normalize(conversation) {
-    const mapping = conversation?.mapping || {}, path = currentPath(conversation), pathSet = new Set(path), messages = [];
-    for (const nodeId of path) {
-      const message = mapping[nodeId]?.message; if (!message) continue;
-      const role = message.author?.role, type = message.content?.content_type || "unknown";
-      if (!["user", "assistant"].includes(role) || TYPES.has(type) || message.metadata?.is_visually_hidden_from_conversation) continue;
-      const text = textContent(message.content);
-      if (text) messages.push({ role, text, createTime: message.create_time ?? null });
-    }
+    const mapping = conversation?.mapping || {}, path = currentPath(conversation), pathSet = new Set(path), messages = visibleMessagesForPath(conversation, path);
     const items = [];
     for (const [nodeId, node] of Object.entries(mapping)) { const item = thinkingItem(nodeId, node, pathSet); if (item) items.push(item); }
     items.sort((a, b) => (a.createTime ?? 0) - (b.createTime ?? 0));
     const turns = buildTurns(items), currentTurns = turns.filter(t => t.onCurrentPath);
+    const source = conversation.catchat_api_source ?? { mode: "unknown" };
     return {
       title: conversation.title || document.title || "Untitled ChatGPT Conversation",
       conversationId: conversation.conversation_id ?? conversation.id ?? null,
-      source: conversation.catchat_api_source ?? { mode: "unknown" },
+      source,
       messages,
+      branches: conversationBranches(conversation, path),
+      branchTreeComplete: source?.branch_tree_complete !== false && source?.mode !== "paginated_current_path",
       contentThinkingTurns: turns.filter(t => Boolean(t.text)),
       contentThinkingTurnsOnCurrentPath: currentTurns.filter(t => Boolean(t.text))
     };
@@ -209,6 +256,16 @@
   function conversationMarkdown(d, includeTimestamps = true, labels = { user: "User", assistant: "Assistant" }) {
     let md = `---\ntitle: ${JSON.stringify(d.title)}\nconversation_id: ${JSON.stringify(d.conversationId)}\nsource: "chatgpt_conversation_api"\napi_mode: ${JSON.stringify(d.source?.mode || "unknown")}\nuser_label: ${JSON.stringify(labels.user)}\nassistant_label: ${JSON.stringify(labels.assistant)}\nmessage_count: ${d.messages.length}\nthinking_turn_current_path_count: ${d.contentThinkingTurnsOnCurrentPath.length}\ntimestamps_included: ${includeTimestamps}\n---\n\n# ${d.title}\n\n`;
     d.messages.forEach((m, i) => {
+      md += `## ${m.role === "user" ? labels.user : labels.assistant}｜${String(i + 1).padStart(4, "0")}\n\n`;
+      const ts = includeTimestamps ? timestampIso(m.createTime) : null; if (ts) md += `> time: ${ts}\n\n`;
+      md += `${m.text}\n\n`;
+    });
+    return md;
+  }
+  function branchMarkdown(d, branch, includeTimestamps = true, labels = { user: "User", assistant: "Assistant" }) {
+    const messages = branch?.messages || [];
+    let md = `---\ntitle: ${JSON.stringify(d.title)}\nconversation_id: ${JSON.stringify(d.conversationId)}\nsource: "chatgpt_conversation_api"\napi_mode: ${JSON.stringify(d.source?.mode || "unknown")}\nbranch_node: ${JSON.stringify(branch?.id || null)}\nbranch_current: ${Boolean(branch?.current)}\nmessage_count: ${messages.length}\nuser_label: ${JSON.stringify(labels.user)}\nassistant_label: ${JSON.stringify(labels.assistant)}\ntimestamps_included: ${includeTimestamps}\n---\n\n# ${d.title}\n\n`;
+    messages.forEach((m, i) => {
       md += `## ${m.role === "user" ? labels.user : labels.assistant}｜${String(i + 1).padStart(4, "0")}\n\n`;
       const ts = includeTimestamps ? timestampIso(m.createTime) : null; if (ts) md += `> time: ${ts}\n\n`;
       md += `${m.text}\n\n`;
@@ -243,14 +300,51 @@
   }
   function status(text, error = false) { const el = document.getElementById("catlog-mobile-status"); if (el) { el.textContent = text; el.style.color = error ? "#ffb3b3" : "#d7cced"; } }
   function enable(on) { for (const id of ["catlog-mobile-chat-md", "catlog-mobile-thinking-md", "catlog-mobile-raw"]) { const el = document.getElementById(id); if (el) el.disabled = !on; } }
+  function selectedBranch() {
+    const id = document.getElementById("catlog-mobile-branch-select")?.value;
+    return data?.branches?.find(branch => branch.id === id) || null;
+  }
+  function refreshBranchStatus() {
+    const box = document.getElementById("catlog-mobile-branch-box"), select = document.getElementById("catlog-mobile-branch-select");
+    const button = document.getElementById("catlog-mobile-branch-md"), info = document.getElementById("catlog-mobile-branch-status");
+    if (!box || !select || !button || !info) return;
+    if (!data) { box.hidden = true; button.disabled = true; return; }
+    box.hidden = false; select.innerHTML = "";
+    if (!data.branchTreeComplete) {
+      select.disabled = true; button.disabled = true;
+      info.textContent = "当前只读到当前路径，隐藏分支不可用；需要 full / full_project。";
+      return;
+    }
+    const branches = Array.isArray(data.branches) ? data.branches : [], hidden = branches.filter(branch => !branch.current);
+    branches.forEach((branch, index) => {
+      const option = document.createElement("option");
+      option.value = branch.id;
+      option.textContent = `${branch.current ? "当前" : `隐藏 ${index}`} · ${branch.messageCount} 条 · ${branch.lastPreview || branch.divergencePreview || "无预览"}`;
+      select.appendChild(option);
+    });
+    if (!hidden.length) {
+      select.disabled = true; button.disabled = true; info.textContent = "完整树已读取，暂未发现其他可恢复聊天分支。"; return;
+    }
+    select.disabled = false;
+    const preferred = hidden.slice().sort((a, b) => b.messageCount - a.messageCount)[0];
+    select.value = preferred.id; button.disabled = false;
+    const update = () => {
+      const branch = selectedBranch(); if (!branch) return;
+      const split = branch.divergenceIndex > 0 ? `前 ${branch.divergenceIndex} 条相同` : "从开头不同";
+      info.textContent = `${branch.current ? "当前分支" : "可恢复隐藏分支"}｜${branch.messageCount} 条｜${split}｜末尾：${branch.lastPreview || "无预览"}`;
+    };
+    select.onchange = update; update();
+  }
   function stopTimer() { if (timer) clearInterval(timer); timer = null; }
   function startTimer() { stopTimer(); started = Date.now(); timer = setInterval(() => status(`读取中 · ${Math.floor((Date.now() - started) / 1000)}s`), 1000); }
   async function read() {
-    raw = data = null; enable(false); startTimer(); status("读取中 · 0s");
+    raw = data = null; enable(false); refreshBranchStatus(); startTimer(); status("读取中 · 0s");
     try {
       raw = await readConversation(); data = normalize(raw); stopTimer();
-      status(`已读｜正文 ${data.messages.length}｜思考 ${data.contentThinkingTurnsOnCurrentPath.length}｜${data.source?.mode || "unknown"}`); enable(true);
-    } catch (e) { stopTimer(); raw = data = null; enable(false); status(`读取失败：${e?.message || e}`, true); }
+      const hidden = data.branches?.filter(branch => !branch.current).length || 0;
+      status(`已读｜正文 ${data.messages.length}｜隐藏分支 ${hidden}｜思考 ${data.contentThinkingTurnsOnCurrentPath.length}｜${data.source?.mode || "unknown"}`);
+      enable(true); refreshBranchStatus();
+    } catch (e) { stopTimer(); raw = data = null; enable(false); refreshBranchStatus(); status(`读取失败：${e?.message || e}`, true); }
   }
 
   function storedAnchor() {
@@ -354,6 +448,12 @@
 .catlog-mobile-label-grid label{display:grid;gap:4px;color:#aaa0b8;font-size:10px}
 .catlog-mobile-label-grid input{width:100%;min-width:0;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:7px 8px;background:rgba(0,0,0,.18);color:#f7f3fb;font:12px/1.2 system-ui,sans-serif}
 .catlog-mobile-label-grid button{grid-column:1/-1;min-height:34px!important;font-size:11px!important}
+.catlog-mobile-branch-box{display:grid;gap:6px;margin-top:9px;padding:8px;border:1px solid rgba(205,185,255,.16);border-radius:10px;background:rgba(151,116,218,.08)}
+.catlog-mobile-branch-box[hidden]{display:none!important}
+.catlog-mobile-branch-title{font-weight:700;font-size:11px}.catlog-mobile-branch-note{color:#aaa0b8;font-size:10px}
+#catlog-mobile-branch-select{width:100%;min-width:0;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:7px 8px;background:rgba(0,0,0,.18);color:#f7f3fb;font:11px/1.25 system-ui,sans-serif}
+#catlog-mobile-branch-md{min-height:34px!important;font-size:11px!important}
+#catlog-mobile-branch-status{padding:6px 7px;border-radius:8px;background:rgba(0,0,0,.14);color:#cfc5dc;font-size:10px;line-height:1.35;overflow-wrap:anywhere}
 #catlog-mobile-status{min-height:36px;margin-top:9px;padding:7px 8px;border-radius:9px;background:rgba(0,0,0,.18);color:#d7cced;overflow-wrap:anywhere;font-size:11px}`;
     document.documentElement.appendChild(style);
 
@@ -367,7 +467,7 @@
     const panel = document.createElement("section");
     panel.id = "catlog-mobile-panel";
     panel.hidden = true;
-    panel.innerHTML = `<div class="catlog-mobile-head"><div class="catlog-mobile-head-main"><div class="catlog-mobile-title">尾痕 | CatLog Mobile</div><div class="catlog-mobile-version">0.1.1 · 当前对话</div></div><div class="catlog-mobile-head-actions"><button id="catlog-mobile-collapse" type="button" title="缩到右边" aria-label="缩到右边">−</button><button id="catlog-mobile-hide" type="button" title="本页隐藏；下次进入会自动显示" aria-label="本页隐藏；下次进入会自动显示">×</button></div></div><div class="catlog-mobile-grid"><button class="wide" id="catlog-mobile-read" type="button">读取当前对话</button><button id="catlog-mobile-chat-md" type="button" disabled>聊天 MD</button><button id="catlog-mobile-thinking-md" type="button" disabled>思考 MD</button><button class="wide" id="catlog-mobile-raw" type="button" disabled>Raw JSON</button></div><label class="catlog-mobile-option"><input id="catlog-mobile-timestamps" type="checkbox" checked><span>导出时间戳</span></label><details class="catlog-mobile-labels"><summary>导出称呼</summary><div class="catlog-mobile-label-grid"><label><span>人类名</span><input id="catlog-mobile-user-label" maxlength="40" placeholder="User"></label><label><span>AI名</span><input id="catlog-mobile-assistant-label" maxlength="40" placeholder="Assistant"></label><button id="catlog-mobile-label-reset" type="button">恢复 User / Assistant</button></div></details><div id="catlog-mobile-status">尚未读取</div>`;
+    panel.innerHTML = `<div class="catlog-mobile-head"><div class="catlog-mobile-head-main"><div class="catlog-mobile-title">尾痕 | CatLog Mobile</div><div class="catlog-mobile-version">0.1.2 · 当前对话</div></div><div class="catlog-mobile-head-actions"><button id="catlog-mobile-collapse" type="button" title="缩到右边" aria-label="缩到右边">−</button><button id="catlog-mobile-hide" type="button" title="本页隐藏；下次进入会自动显示" aria-label="本页隐藏；下次进入会自动显示">×</button></div></div><div class="catlog-mobile-grid"><button class="wide" id="catlog-mobile-read" type="button">读取当前对话</button><button id="catlog-mobile-chat-md" type="button" disabled>聊天 MD</button><button id="catlog-mobile-thinking-md" type="button" disabled>思考 MD</button><button class="wide" id="catlog-mobile-raw" type="button" disabled>Raw JSON</button></div><div id="catlog-mobile-branch-box" class="catlog-mobile-branch-box" hidden><div><div class="catlog-mobile-branch-title">分支抢救</div><div class="catlog-mobile-branch-note">从完整 mapping 导出官端当前没有展示的聊天支线</div></div><select id="catlog-mobile-branch-select"></select><button id="catlog-mobile-branch-md" type="button" disabled>导出选中分支 MD</button><div id="catlog-mobile-branch-status"></div></div><label class="catlog-mobile-option"><input id="catlog-mobile-timestamps" type="checkbox" checked><span>导出时间戳</span></label><details class="catlog-mobile-labels"><summary>导出称呼</summary><div class="catlog-mobile-label-grid"><label><span>人类名</span><input id="catlog-mobile-user-label" maxlength="40" placeholder="User"></label><label><span>AI名</span><input id="catlog-mobile-assistant-label" maxlength="40" placeholder="Assistant"></label><button id="catlog-mobile-label-reset" type="button">恢复 User / Assistant</button></div></details><div id="catlog-mobile-status">尚未读取</div>`;
     document.documentElement.appendChild(panel);
 
     let anchor = storedAnchor() ?? window.innerHeight * 0.5;
@@ -427,6 +527,11 @@
     panel.querySelector("#catlog-mobile-chat-md").onclick = () => data && download(`${base()}.md`, conversationMarkdown(data, panel.querySelector("#catlog-mobile-timestamps").checked, exportLabels()), "text/markdown;charset=utf-8");
     panel.querySelector("#catlog-mobile-thinking-md").onclick = () => data && download(`${base()}-thinking-current.md`, thinkingMarkdown(data, panel.querySelector("#catlog-mobile-timestamps").checked), "text/markdown;charset=utf-8");
     panel.querySelector("#catlog-mobile-raw").onclick = () => raw && download(`${base()}.raw.json`, JSON.stringify(raw, null, 2), "application/json;charset=utf-8");
+    panel.querySelector("#catlog-mobile-branch-md").onclick = () => {
+      const branch = selectedBranch(); if (!data || !branch) return;
+      const index = Math.max(1, data.branches.findIndex(item => item.id === branch.id) + 1);
+      download(`${base()}-branch-${String(index).padStart(2, "0")}-recovered.md`, branchMarkdown(data, branch, panel.querySelector("#catlog-mobile-timestamps").checked, exportLabels()), "text/markdown;charset=utf-8");
+    };
   }
 
   mount();
