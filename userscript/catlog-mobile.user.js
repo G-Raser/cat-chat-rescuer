@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         尾痕 | CatLog Mobile
 // @namespace    https://github.com/G-Raser/cat-chat-rescuer
-// @version      0.1.2
+// @version      0.1.3
 // @description  Lightweight mobile userscript for exporting the current ChatGPT conversation, displayed thinking traces, or raw JSON.
 // @match        https://chatgpt.com/*
 // @match        https://chat.openai.com/*
-// @grant        unsafeWindow
+// @grant        none
 // @downloadURL  https://raw.githubusercontent.com/G-Raser/cat-chat-rescuer/main/userscript/catlog-mobile.user.js
 // @updateURL    https://raw.githubusercontent.com/G-Raser/cat-chat-rescuer/main/userscript/catlog-mobile.user.js
 // @run-at       document-idle
@@ -17,8 +17,8 @@
   globalThis.__CATLOG_MOBILE__ = true;
 
   const TYPES = new Set(["thoughts", "reasoning_recap"]);
-  const pageWindow = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
-  const pageFetch = pageWindow.fetch.bind(pageWindow);
+  // Keep fetch and Response in the same realm on Firefox; no unsafeWindow bridge is needed.
+  const pageFetch = globalThis.fetch.bind(globalThis);
   const USER_LABEL_KEY = "catlog-mobile-user-label";
   const ASSISTANT_LABEL_KEY = "catlog-mobile-assistant-label";
   const POSITION_KEY = "catlog-mobile-anchor-y";

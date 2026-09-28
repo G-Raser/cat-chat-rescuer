@@ -1,5 +1,19 @@
 # CatLog Mobile Changelog
 
+## v0.1.3
+
+### Fixed
+
+- Avoids a Firefox userscript cross-realm Response access failure when reading ChatGPT conversations. Uses same-realm fetch with no userscript sandbox grants; the authenticated API and export formats remain unchanged.
+
+## v0.1.2
+
+### Added
+
+- Detects recoverable conversation branches when the full mapping is available.
+- Shows branch message counts, divergence positions and previews; supports standalone Markdown export of a selected branch.
+- Reports when a paginated current-path response lacks a complete branch tree.
+
 ## v0.1.1
 
 Improves the mobile floating-panel behavior so CatLog can stay available without permanently blocking ChatGPT controls or content.

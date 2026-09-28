@@ -1,8 +1,8 @@
-# 尾痕 | CatLog Mobile v0.1.1
+# 尾痕 | CatLog Mobile v0.1.3
 
 这是 **尾痕 | CatLog** 的轻量移动端 userscript，主要用于 Firefox Android + Tampermonkey 场景。
 
-> 已在 Firefox Android + Tampermonkey 实机测试过 v0.1.0 的核心读取 / 导出能力；v0.1.1 主要增加浮窗移动、缩边和本页隐藏交互。
+> 已在 Firefox Android + Tampermonkey 实机测试。v0.1.2 在 v0.1.1 的浮窗交互基础上新增完整 branch tree 的分支识别与隐藏分支恢复导出。v0.1.3 修正 Firefox 中跨执行环境调用 fetch 时可能出现的 Response.body 权限错误，等待最新实机验收。
 
 ## 当前功能
 
@@ -11,6 +11,8 @@
 - 导出当前分支中有正文的已展示 `thoughts` 思考轨迹 Markdown
 - 保留可用的 `Worked for ...`、model、time 元数据
 - 导出 Raw conversation JSON
+- 完整 branch tree 可用时识别当前分支之外的隐藏聊天分支
+- 查看分叉位置、消息数和末尾预览，并单独导出选中分支 Markdown
 - 时间戳开关
 - 自定义 `人类名 / AI名`
   - 输入框默认留空
@@ -36,7 +38,7 @@
 5. 页面右侧应出现 `尾痕` 小把手。
 6. 点开后先按 `读取当前对话`，读取成功后再导出需要的文件。
 
-脚本 metadata 已设置 GitHub Raw `@updateURL` / `@downloadURL`。v0.1.1 已提升 `@version`，Tampermonkey 可按正常 userscript 更新流程识别新版本。
+脚本 metadata 已设置 GitHub Raw `@updateURL` / `@downloadURL`。v0.1.3 已提升 `@version`，Tampermonkey 可按正常 userscript 更新流程识别后续新版本。
 
 ## 浮窗交互
 
@@ -51,12 +53,12 @@
 
 Mobile userscript 是轻量 companion，不替代桌面 Extension。
 
-桌面 Extension 继续负责完整 API-first UI、整棵树思考导出、传统 DOM / 增量抢救等功能；Mobile 当前优先解决“手机上把当前对话和已展示思考轨迹直接叼回来”。
+桌面 Extension 继续负责完整 API-first UI、一站式自动归档、整棵树思考导出、传统 DOM / 增量抢救等功能；Mobile 当前优先解决手机端快速读取、导出和轻量分支恢复。
 
 版本独立维护：
 
-- Extension：当前正式版 v0.5.6
-- Mobile userscript：当前正式版 v0.1.1
+- Extension：当前公开版 v0.5.6
+- Mobile userscript：当前版本 v0.1.3
 
 ## 隐私
 
@@ -73,6 +75,7 @@ Mobile userscript 是轻量 companion，不替代桌面 Extension。
 - ChatGPT 内部 conversation 接口不是稳定公开 API，未来可能变化。
 - 当前 Mobile 只提供“当前对话”读取，不提供桌面版的粘贴任意 conversation ID / URL 读取界面。
 - 思考轨迹默认只导出当前分支中真正有正文的已展示 / 可恢复 `thoughts`。
+- 隐藏分支恢复只在 `full` / `full_project` 等完整 branch tree 可用时启用；若当前只能读取分页 current path，会明确禁用该功能。
 - 当前不带传统 DOM / State / 增量抢救工具。
 - 不保证完整重建图片、附件或其他富媒体。
 
