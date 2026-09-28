@@ -1,5 +1,11 @@
 # CatLog Mobile Changelog
 
+## v0.1.4
+
+### Fixed
+
+- Aligns the floating-panel version label and userscript metadata; increments the version so existing v0.1.3 test installations can receive the update.
+
 ## v0.1.3
 
 ### Fixed

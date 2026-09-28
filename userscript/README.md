@@ -1,8 +1,8 @@
-# 尾痕 | CatLog Mobile v0.1.3
+# 尾痕 | CatLog Mobile v0.1.4
 
 这是 **尾痕 | CatLog** 的轻量移动端 userscript，主要用于 Firefox Android + Tampermonkey 场景。
 
-> 已在 Firefox Android + Tampermonkey 实机测试。v0.1.2 在 v0.1.1 的浮窗交互基础上新增完整 branch tree 的分支识别与隐藏分支恢复导出。v0.1.3 修正 Firefox 中跨执行环境调用 fetch 时可能出现的 Response.body 权限错误，本轮已在 Firefox Android + Tampermonkey 更新测试。
+> 已在 Firefox Android + Tampermonkey 实机测试。v0.1.2 在 v0.1.1 的浮窗交互基础上新增完整 branch tree 的分支识别与隐藏分支恢复导出。v0.1.3 修正 Firefox 中跨执行环境调用 fetch 时可能出现的 Response.body 权限错误，本轮已在 Firefox Android + Tampermonkey 更新测试；v0.1.4 同步修正浮窗版本号，以便已安装 v0.1.3 测试版的设备收到更新。
 
 ## 当前功能
 
@@ -38,7 +38,7 @@
 5. 页面右侧应出现 `尾痕` 小把手。
 6. 点开后先按 `读取当前对话`，读取成功后再导出需要的文件。
 
-脚本 metadata 已设置 GitHub Raw `@updateURL` / `@downloadURL`。v0.1.3 已提升 `@version`，Tampermonkey 可按正常 userscript 更新流程识别后续新版本。
+脚本 metadata 已设置 GitHub Raw `@updateURL` / `@downloadURL`。v0.1.4 已提升 `@version`，Tampermonkey 可按正常 userscript 更新流程识别后续新版本。
 
 ## 浮窗交互
 
@@ -58,7 +58,7 @@ Mobile userscript 是轻量 companion，不替代桌面 Extension。
 版本独立维护：
 
 - Extension：当前公开版 v0.5.6
-- Mobile userscript：当前版本 v0.1.3
+- Mobile userscript：当前版本 v0.1.4
 
 ## 隐私
 
