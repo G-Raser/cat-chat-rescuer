@@ -2,7 +2,7 @@
 
 这是 **尾痕 | CatLog** 的轻量移动端 userscript，主要用于 Firefox Android + Tampermonkey 场景。
 
-> 已在 Firefox Android + Tampermonkey 实机测试。v0.1.2 在 v0.1.1 的浮窗交互基础上新增完整 branch tree 的分支识别与隐藏分支恢复导出。v0.1.3 修正 Firefox 中跨执行环境调用 fetch 时可能出现的 Response.body 权限错误，等待最新实机验收。
+> 已在 Firefox Android + Tampermonkey 实机测试。v0.1.2 在 v0.1.1 的浮窗交互基础上新增完整 branch tree 的分支识别与隐藏分支恢复导出。v0.1.3 修正 Firefox 中跨执行环境调用 fetch 时可能出现的 Response.body 权限错误，本轮已在 Firefox Android + Tampermonkey 更新测试。
 
 ## 当前功能
 

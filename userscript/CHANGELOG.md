@@ -5,6 +5,7 @@
 ### Fixed
 
 - Avoids a Firefox userscript cross-realm Response access failure when reading ChatGPT conversations. Uses same-realm fetch with no userscript sandbox grants; the authenticated API and export formats remain unchanged.
+- Corrects the floating-panel version label to match the userscript metadata.
 
 ## v0.1.2
 
