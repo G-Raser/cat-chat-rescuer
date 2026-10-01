@@ -5,7 +5,7 @@
 当前公开版本分为两条发行线：
 
 - **Extension v0.5.6**：Edge / Chrome 桌面扩展，完整 API-first 归档、思考轨迹导出与传统 DOM / 增量抢救。
-- **Mobile userscript v0.1.4**：Firefox Android + Tampermonkey 轻量手机脚本，可直接导出当前对话、当前分支思考轨迹和 Raw JSON；完整会话树可用时也支持隐藏分支恢复。
+- **Mobile userscript v0.1.6**：Firefox Android + Tampermonkey 轻量手机脚本，可直接导出当前对话、当前分支思考轨迹和 Raw JSON；完整会话树可用时也支持隐藏分支恢复。
 
 桌面扩展采用 **API-first** 架构：优先直接读取当前 ChatGPT 会话可访问的 conversation JSON；旧版 DOM / 增量扫描工具仍保留为救援模式。Mobile userscript 复用同一类 API-first 思路，但刻意保持轻量。
 
@@ -68,7 +68,7 @@ Assistant
 
 ### 主计数与默认导出
 
-主功能只把 **真正有正文内容的 `thoughts` 回合**算作“思考回合”。
+主功能只把 **真正有正文内容的 `thoughts` 回合**算作“思考摘要”；`metadata.reasoning_title` 作为独立的“思考标题”统计和导出，不会抬高思考摘要数量。
 
 以下内容不会单独占据主计数或主导出：
 
@@ -76,6 +76,7 @@ Assistant
 - `Worked for a few seconds`
 - 只有时长的 `reasoning_recap`
 - 没有正文的纯工具流水摘要
+- `metadata.reasoning_title`（单独列为“思考标题”，不计入“思考摘要”）
 
 如果一个有正文的思考回合同时带有 `Worked for ...`，Markdown 可以把它作为该回合的附属信息保留。
 
@@ -114,7 +115,7 @@ Assistant
 
 这样可以区分“仍在读取超长对话”和“界面已经卡死”。
 
-读取成功后会显示正文数量、有效思考数量以及当前读取模式，例如 `full`、`full_project` 或分页 fallback。
+读取成功后会分别显示正文数量、思考摘要数量、思考标题数量以及当前读取模式，例如 `full`、`full_project` 或分页 fallback。
 
 ## UI 启动与恢复
 
@@ -171,7 +172,7 @@ API-first 是默认路线；传统 DOM 模式是救援路线。
 
 ### Mobile / Firefox Android
 
-Mobile v0.1.4 位于 [`userscript/`](userscript/README.md)。
+Mobile v0.1.6 位于 [`userscript/`](userscript/README.md)。
 
 已实测的最短安装路径：Firefox Android + Tampermonkey → 安装 [`catlog-mobile.user.js`](userscript/catlog-mobile.user.js) → 打开具体 ChatGPT 对话并刷新。
 
@@ -219,7 +220,7 @@ API-first 读取使用当前浏览器里已经登录的 ChatGPT 会话，在 Cha
 - Raw JSON 可能包含敏感元数据，分享前必须人工检查。
 - 传统 DOM 模式仍会受到页面 DOM 改版影响。
 - API 中缺失 `create_time` 的条目不会伪造时间戳。
-- Mobile v0.1.4 当前只做当前对话 / 当前分支轻量导出，支持完整会话树里的隐藏分支恢复，但不包含桌面版完整 DOM / 增量救援工具。
+- Mobile v0.1.6 当前只做当前对话 / 当前分支轻量导出，支持完整会话树里的隐藏分支恢复，但不包含桌面版完整 DOM / 增量救援工具。
 
 ## 文件与模块
 

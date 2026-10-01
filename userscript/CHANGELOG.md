@@ -1,5 +1,13 @@
 # CatLog Mobile Changelog
 
+## v0.1.6
+
+### Changed
+
+- Keeps the existing text-bearing `thoughts` count as the thinking-summary count.
+- Extracts `metadata.reasoning_title` into a separate reasoning-title count and Markdown section instead of mixing it into summary totals.
+- Adds `conversation_title` and `conversation_id` provenance to thinking Markdown frontmatter.
+
 ## v0.1.4
 
 ### Fixed
