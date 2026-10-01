@@ -1,5 +1,12 @@
 # CatLog Mobile Changelog
 
+## v0.1.7
+
+### Fixed
+
+- Counts metadata.reasoning_title per grouped thinking turn instead of per raw mapping node.
+- Deduplicates repeated reasoning-title metadata inside the same turn_exchange_id / working_turn_id, while keeping distinct titles from different turns separate.
+
 ## v0.1.6
 
 ### Changed
