@@ -1,5 +1,13 @@
 # CatLog Mobile Changelog
 
+## v0.1.6
+
+### Changed
+
+- Separates displayed `thoughts` summaries from `metadata.reasoning_title`: summary counts keep the previous body-only rule, while reasoning titles have their own count.
+- Exports `思考摘要` and `思考标题` as separate Markdown sections.
+- Adds `conversation_title` and `conversation_id` provenance to thinking Markdown for downstream card/archive workflows.
+
 ## v0.1.4
 
 ### Fixed

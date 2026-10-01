@@ -1,15 +1,16 @@
-# 尾痕 | CatLog Mobile v0.1.4
+# 尾痕 | CatLog Mobile v0.1.6
 
 这是 **尾痕 | CatLog** 的轻量移动端 userscript，主要用于 Firefox Android + Tampermonkey 场景。
 
-> 已在 Firefox Android + Tampermonkey 实机测试。v0.1.2 在 v0.1.1 的浮窗交互基础上新增完整 branch tree 的分支识别与隐藏分支恢复导出。v0.1.3 修正 Firefox 中跨执行环境调用 fetch 时可能出现的 Response.body 权限错误，本轮已在 Firefox Android + Tampermonkey 更新测试；v0.1.4 同步修正浮窗版本号，以便已安装 v0.1.3 测试版的设备收到更新。
+> 已在 Firefox Android + Tampermonkey 实机测试。v0.1.2 在 v0.1.1 的浮窗交互基础上新增完整 branch tree 的分支识别与隐藏分支恢复导出。v0.1.3 修正 Firefox 中跨执行环境调用 fetch 时可能出现的 Response.body 权限错误，本轮已在 Firefox Android + Tampermonkey 更新测试；v0.1.4 同步修正浮窗版本号，以便已安装 v0.1.3 测试版的设备收到更新。v0.1.6 将思考摘要与 reasoning title 分开统计，并在 thinking Markdown 中加入来源窗口名和 conversation_id。
 
 ## 当前功能
 
 - 读取当前 `/c/...` ChatGPT 对话
 - 导出可读聊天 Markdown
-- 导出当前分支中有正文的已展示 `thoughts` 思考轨迹 Markdown
-- 保留可用的 `Worked for ...`、model、time 元数据
+- 导出当前分支思考轨迹 Markdown：有正文的 `thoughts` 计为“思考摘要”，`metadata.reasoning_title` 单独计为“思考标题”
+- 思考摘要与思考标题分区导出并分别计数；保留可用的 `Worked for ...`、model、time 元数据
+- thinking Markdown 记录来源窗口名与 `conversation_id`，供下游思考卡保留来源
 - 导出 Raw conversation JSON
 - 完整 branch tree 可用时识别当前分支之外的隐藏聊天分支
 - 查看分叉位置、消息数和末尾预览，并单独导出选中分支 Markdown
@@ -38,7 +39,7 @@
 5. 页面右侧应出现 `尾痕` 小把手。
 6. 点开后先按 `读取当前对话`，读取成功后再导出需要的文件。
 
-脚本 metadata 已设置 GitHub Raw `@updateURL` / `@downloadURL`。v0.1.4 已提升 `@version`，Tampermonkey 可按正常 userscript 更新流程识别后续新版本。
+脚本 metadata 已设置 GitHub Raw `@updateURL` / `@downloadURL`。v0.1.6 已提升 `@version`，Tampermonkey 可按正常 userscript 更新流程识别后续新版本。
 
 ## 浮窗交互
 
@@ -58,7 +59,7 @@ Mobile userscript 是轻量 companion，不替代桌面 Extension。
 版本独立维护：
 
 - Extension：当前公开版 v0.5.6
-- Mobile userscript：当前版本 v0.1.4
+- Mobile userscript：当前版本 v0.1.6
 
 ## 隐私
 
@@ -74,7 +75,7 @@ Mobile userscript 是轻量 companion，不替代桌面 Extension。
 
 - ChatGPT 内部 conversation 接口不是稳定公开 API，未来可能变化。
 - 当前 Mobile 只提供“当前对话”读取，不提供桌面版的粘贴任意 conversation ID / URL 读取界面。
-- 思考轨迹默认只导出当前分支中真正有正文的已展示 / 可恢复 `thoughts`。
+- 思考摘要仍只统计当前分支中真正有正文的已展示 / 可恢复 `thoughts`；`reasoning_title` 单独作为思考标题统计，不占摘要数。
 - 隐藏分支恢复只在 `full` / `full_project` 等完整 branch tree 可用时启用；若当前只能读取分页 current path，会明确禁用该功能。
 - 当前不带传统 DOM / State / 增量抢救工具。
 - 不保证完整重建图片、附件或其他富媒体。
