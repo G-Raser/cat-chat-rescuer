@@ -1,5 +1,12 @@
 # CatLog Mobile Changelog
 
+## v0.1.5
+
+### Fixed
+
+- Includes metadata.reasoning_title in thinking exports, including turns that only expose a reasoning title and no thoughts body.
+- Keeps reasoning_title grouped with matching turn_exchange_id / working_turn_id thinking data instead of treating it as a chat message.
+
 ## v0.1.4
 
 ### Fixed
