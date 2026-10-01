@@ -286,22 +286,22 @@
   function thinkingMarkdown(d, includeTimestamps = true) {
     const summaries = d.contentThinkingTurnsOnCurrentPath || [], titles = d.reasoningTitlesOnCurrentPath || [];
     let md = `---\nconversation_title: ${JSON.stringify(d.title)}\nconversation_id: ${JSON.stringify(d.conversationId)}\nsource: "chatgpt_conversation_api"\napi_mode: ${JSON.stringify(d.source?.mode || "unknown")}\nthinking_summary_count: ${summaries.length}\nreasoning_title_count: ${titles.length}\ntimestamps_included: ${includeTimestamps}\n---\n\n# ${d.title}｜思考轨迹\n\n> 范围：当前分支｜思考摘要 ${summaries.length}｜思考标题 ${titles.length}｜时间戳：${includeTimestamps ? "是" : "否"}\n\n`;
-    md += `## 思考摘要\n\n`;
-    summaries.forEach((t, i) => {
-      const title = t.title || t.summaryOnly?.[0] || t.recapText || `思考回合 ${i + 1}`;
-      md += `### ${String(i + 1).padStart(4, "0")}｜${title}\n\n`;
-      if (t.text) md += `${t.text}\n\n`;
-      if (t.recapText && t.recapText !== title) md += `- ${t.recapText}\n`;
-      else if (Number.isFinite(t.durationSec)) md += `- Worked for ${t.durationSec}s\n`;
-      if (t.model) md += `- model: ${t.model}\n`;
-      const ts = includeTimestamps ? timestampIso(t.createTime) : null; if (ts) md += `- time: ${ts}\n`;
-      md += "\n";
-    });
     md += `## 思考标题\n\n`;
     titles.forEach((item, i) => {
       md += `### ${String(i + 1).padStart(4, "0")}｜${item.title}\n\n`;
       if (item.model) md += `- model: ${item.model}\n`;
       const ts = includeTimestamps ? timestampIso(item.createTime) : null; if (ts) md += `- time: ${ts}\n`;
+      md += "\n";
+    });
+    md += `## 思考摘要\n\n`;
+    summaries.forEach((t, i) => {
+      const title = t.title || t.summaryOnly?.[0] || t.recapText || `思考回合 ${i + 1}`;
+      md += `## ${String(i + 1).padStart(4, "0")}｜${title}\n\n`;
+      if (t.text) md += `${t.text}\n\n`;
+      if (t.recapText && t.recapText !== title) md += `- ${t.recapText}\n`;
+      else if (Number.isFinite(t.durationSec)) md += `- Worked for ${t.durationSec}s\n`;
+      if (t.model) md += `- model: ${t.model}\n`;
+      const ts = includeTimestamps ? timestampIso(t.createTime) : null; if (ts) md += `- time: ${ts}\n`;
       md += "\n";
     });
     return md;
